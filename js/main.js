@@ -63,7 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         headerSection.appendChild(b);
 
-        tabButtons[key] = btn;
+        tabButtons[btn['sect']] = b;
     }
 
     showTab(Sections.DASH);
@@ -74,6 +74,9 @@ document.addEventListener("DOMContentLoaded", () => {
         filamentManagerSection.hidden = true;
         printQueueSection.hidden = true;
         dataExportSection.hidden = true;
+        for (const el of Object.values(tabButtons)) {
+            el.classList.remove('active');
+        }
 
         switch (t) {
             case Sections.DASH:
@@ -95,5 +98,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 console.error("showTab called with incorrect tabname.");
                 break;
         }
+
+        tabButtons[t].classList.add('active');
     }
 });

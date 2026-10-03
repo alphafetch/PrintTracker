@@ -21,7 +21,7 @@
     height: 10%;
     width: 100%;
     background-color: var(--surface);
-    border-bottom: 5px var(--border);
+    border-bottom: solid 5px var(--border);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -44,6 +44,10 @@
     cursor: pointer;
     display: flex;
     align-items: center;
+}
+
+.active {
+    border-bottom: solid 3px var(--accent);
 }
 
 body {
