@@ -5,6 +5,46 @@ document.addEventListener("DOMContentLoaded", () => {
     const filamentManagerSection = document.getElementById('filament');
     const printQueueSection = document.getElementById('queue');
     const dataExportSection = document.getElementById('data');
+    const createPrintButton = document.getElementById('add-print-button');
+    const cancelPrintButton = document.getElementById('cancel-print-button');
+    const createSpoolButton = document.getElementById('add-spool-button');
+    const cancelSpoolButton = document.getElementById('cancel-spool-button');
+    const archiveOffBox = document.getElementById('archive-off-checkbox');
+
+    const date = new Date();
+
+    let printTracker = localStorage.getItem('printTracker');
+    if (!printTracker) {
+        let newTracker = Object({
+            prints: { },
+            spools: { },
+            hideArchived: false,
+            schemaVersion: 1
+        });
+        
+        saveData(newTracker);
+        printTracker = localStorage.getItem('printTracker');
+    }
+
+    try {
+        var printTrackerJ = JSON.parse(printTracker);
+    } catch (error) {
+        console.error(error);
+        let newTracker = Object({
+            prints: { },
+            spools: { },
+            hideArchived: false,
+            schemaVersion: 1
+        });
+        saveData(newTracker);
+        printTracker = localStorage.getItem('printTracker');
+        var printTrackerJ = JSON.parse(printTracker);
+    }
+    printTrackerJ.prints ??= {};
+    printTrackerJ.spools ??= {};
+    printTrackerJ.hideArchived ??= 0;
+    printTrackerJ.schemaVersion ??= 1;
+    saveData(printTrackerJ);
 
     const Sections = Object.freeze({
         DASH: 'dashboard',
@@ -45,7 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // HEADER SECTION
     const mainHeader = document.createElement('h1');
         mainHeader.innerHTML = "Print Tracker";
-        mainHeader.className = "headers";
+        mainHeader.classList.add("headers");
         mainHeader.id = "main-header"
         mainHeader.addEventListener("click", () => {
             showTab(Sections.DASH);
@@ -56,7 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
     for (const [key, btn] of Object.entries(buttonsData)) {
         const b = document.createElement('div');
             b.innerHTML = btn['inner'];
-            b.className = 'buttons';
+            b.classList.add('tab-buttons');
             b.id = btn['idprefix'] + '-button';
             b.addEventListener('click', () => {
                 showTab(btn['sect']);
@@ -66,7 +106,321 @@ document.addEventListener("DOMContentLoaded", () => {
         tabButtons[btn['sect']] = b;
     }
 
-    showTab(Sections.DASH);
+    // PRINTS SECTION
+    const printPopup = document.getElementById('print-popup');
+    const filamentRowsDiv = document.getElementById('filament-rows');
+
+    cancelPrintButton.addEventListener('click', () => {
+        printPopup.style.display = 'none';
+    });
+
+    var rowCount = 0;
+
+    const printsCardDiv = document.createElement('div');
+        printsCardDiv.classList.add('card');
+    printsSection.appendChild(printsCardDiv);
+
+    const plusPrintElem = document.createElement('button');
+        plusPrintElem.innerHTML = '+';
+        plusPrintElem.classList.add('acc-buttons');
+        plusPrintElem.addEventListener('click', () => {
+            printPopup.style.display = 'block';
+        });
+    printsCardDiv.appendChild(plusPrintElem);
+
+    try {
+        if (Object.keys(printTrackerJ.prints).length > 0) {
+            Object.entries(printTrackerJ.prints).forEach(([key, value]) => {
+                showPrintCard(key, value);
+            });
+        } else {
+            const clickElem = document.createElement('p');
+                clickElem.innerHTML = "No prints yet! Click the + to start a new print!";
+                clickElem.classList.add('warn-text');
+            printsCardDiv.appendChild(clickElem);
+        }
+    } catch (error) {
+        console.error(error);   
+        printsCardDiv.hidden = true;
+        const failElem = document.createElement('p');
+            failElem.innerHTML = "Failed to load prints.";
+            failElem.classList.add('fail-text');
+        printsSection.appendChild(failElem);
+    }    
+
+    // FILAMENT SECTION
+    const filamentDiv = document.createElement('div');
+        filamentDiv.classList.add('card');
+        filamentDiv.id = 'spools';
+    filamentManagerSection.appendChild(filamentDiv);
+
+    const filamentAddPopup = document.getElementById('filament-add-popup');
+
+    cancelSpoolButton.addEventListener('click', () => {
+        filamentAddPopup.style.display = 'none';
+    });
+
+    const brandInput = document.getElementById('brand-tinput');
+    const materialDropdown = document.getElementById('material-dropdown');
+    const colorInput = document.getElementById('color-tinput');
+    const gramsInput = document.getElementById('grams-ninput');
+    const priceInput = document.getElementById('price-ninput');
+    const dateInput = document.getElementById('date-dinput');
+
+    createSpoolButton.addEventListener('click', () => {
+        try {
+            if ( brandInput.value.trim() != '' && 
+                 dateInput.checkValidity() &&
+                 colorInput.value.trim() != '' &&
+                 gramsInput.value > 0 ) {
+                let uuid = crypto.randomUUID().toString();
+                printTrackerJ.spools[uuid] = {
+                    brand: brandInput.value,
+                    material: materialDropdown.value,
+                    color: colorInput.value,
+                    startGrams: gramsInput.valueAsNumber,
+                    spoolLogs: 0,
+                    price: priceInput.valueAsNumber,
+                    date: dateInput.value,
+                    archived: false
+                };
+
+                saveData(printTrackerJ);
+                filamentAddPopup.style.display = 'none';
+                renderSpools();
+            }
+        } catch (error) {
+            console.error(error);
+            filamentAddPopup.style.display = 'none';
+            filamentDiv.style.display = 'none';
+            const failElem = document.createElement('p');
+                failElem.innerHTML = "Failed to save spool.";
+                failElem.classList.add('fail-text');
+            filamentManagerSection.appendChild(failElem);
+        }
+    });
+
+    try {
+        archiveOffBox.checked = printTrackerJ.hideArchived;
+        renderSpools();
+    } catch (error) {
+        console.error(error);
+        filamentDiv.hidden = true;
+        const failElem = document.createElement('p');
+            failElem.innerHTML = "Failed to load spools.";
+            failElem.classList.add('fail-text');
+        filamentManagerSection.appendChild(failElem);
+    }
+
+    // Misc
+    archiveOffBox.addEventListener('click', () => {
+        printTrackerJ.hideArchived = archiveOffBox.checked;
+        saveData(printTrackerJ);
+        renderSpools();
+    });
+
+    showTab(Sections.FILA);
+
+    function renderSpools() {
+        filamentDiv.replaceChildren();
+
+        const plusSpoolElem = document.createElement('button');
+            plusSpoolElem.innerHTML = '+';
+            plusSpoolElem.classList.add('acc-buttons');
+            plusSpoolElem.addEventListener('click', () => {
+                const allInputs = document.querySelectorAll('input');
+                allInputs.forEach(input => {
+                    if (input.type === 'checkbox' || input.type === 'radio') {
+                        input.checked = false;
+                    } else {
+                        input.value = '';
+                    }
+                });
+
+                filamentAddPopup.style.display = 'block';
+            });
+        filamentDiv.appendChild(plusSpoolElem);
+
+        if (Object.keys(printTrackerJ.spools).length > 0) {
+            Object.entries(printTrackerJ.spools).forEach(([key, value]) => {
+                if (value.archived) {
+                    if (archiveOffBox.checked == false) {
+                        showSpoolCard(key, value);
+                    }
+                } else {
+                    showSpoolCard(key, value);
+                }
+            });
+
+            if (filamentDiv.children.length <= 1) {
+                const clickElem = document.createElement('p');
+                    clickElem.innerHTML = "All spools are archived. Uncheck 'Hide archived' to see them, or click the + to add a new spool.";
+                    clickElem.classList.add('warn-text');
+                filamentDiv.appendChild(clickElem);
+            }
+        } else {
+            const clickElem = document.createElement('p');
+                clickElem.innerHTML = "No spools yet! Click the + to add a spool!";
+                clickElem.classList.add('warn-text');
+            filamentDiv.appendChild(clickElem);
+        }
+    }
+
+    function saveData(d) {
+        localStorage.setItem('printTracker', JSON.stringify(d));
+    }
+
+    function showPrintCard(k, v) {
+
+    }
+
+    function showSpoolCard(k, v) {
+        const spoolCard = document.createElement('div');
+            spoolCard.classList.add('row-card');
+            spoolCard.id = k;
+        filamentDiv.appendChild(spoolCard);
+
+        let remGramsCalc = v.startGrams - v.spoolLogs;
+
+        const titleOfCard = document.createElement('h2');
+            titleOfCard.textContent = v.brand + ', ' + v.color;
+            titleOfCard.classList.add('headers');
+            titleOfCard.classList.add('section-header');
+            titleOfCard.classList.add('no-bottom-mar');
+
+            const materialOfCard = document.createElement('span');
+                materialOfCard.textContent = v.material.toString().toUpperCase();
+                materialOfCard.classList.add('badge');
+                materialOfCard.style.color = 'var(--text)';
+                materialOfCard.style.marginLeft = '15px';
+            titleOfCard.appendChild(materialOfCard);
+
+            if (v.archived) {
+                const archivedBadge = document.createElement('span');
+                    archivedBadge.innerHTML = 'Archived';
+                    archivedBadge.classList.add('badge');
+                    archivedBadge.classList.add('badge-purple-override');
+                    archivedBadge.style.color = 'var(--text)';
+                    archivedBadge.style.marginLeft = '15px';
+                titleOfCard.appendChild(archivedBadge);
+            }
+        spoolCard.appendChild(titleOfCard);
+
+        const remainingGrams = document.createElement('p');
+            remainingGrams.textContent = '~' + remGramsCalc.toFixed(1).toString() + 'g remaining of ' + v.startGrams.toString() + 'g';
+            remainingGrams.classList.add('body-text');
+            remainingGrams.classList.add('no-top-mar');
+            remainingGrams.classList.add('no-bottom-mar');
+
+            const remainingGramsPerc = document.createElement('span');
+                remainingGramsPerc.textContent = '(~' + Math.round((remGramsCalc / v.startGrams) * 100).toString() + '% remaining)';
+                if (remGramsCalc > (v.startGrams / 2)) {
+                    remainingGramsPerc.classList.add('body-text');
+                } else if (remGramsCalc > v.startGrams / 4) {
+                    remainingGramsPerc.classList.add('warn-text');
+                } else {
+                    remainingGramsPerc.classList.add('fail-text');
+                }
+                remainingGramsPerc.classList.add('inline-text');
+            remainingGrams.appendChild(remainingGramsPerc);
+
+            if (remGramsCalc <= v.startGrams / 4 && !v.archived) {
+                const lowWarning = document.createElement('span');
+                    lowWarning.textContent = 'Filament Low!';
+                    lowWarning.classList.add('badge');
+                    lowWarning.classList.add('badge-red-override');
+                    lowWarning.classList.add('low-mar-badge-override');
+                    lowWarning.style.color = 'var(--text)';
+                    lowWarning.style.marginLeft = '15px';
+                remainingGrams.appendChild(lowWarning);
+            }
+        spoolCard.appendChild(remainingGrams);
+
+        const lowerRow = document.createElement('div');
+            lowerRow.classList.add('body-text');
+            lowerRow.style.marginBottom = '15px';
+            lowerRow.classList.add('no-top-mar');
+            lowerRow.classList.add('no-bottom-mar');
+            lowerRow.classList.add('secondary-text');
+
+            const [yyyy, mm, dd] = v.date.split('-');
+            const formattedDate = `${mm}/${dd}/${yyyy}`;
+            const costPerGram = v.price / v.startGrams;
+            const checkedPrice = v.price ? "$" + v.price.toFixed(2).toString() : 'No price';
+            const checkedCPG = costPerGram ? "~$" + costPerGram.toFixed(3).toString() + '/g' : '-';
+            
+            lowerRow.textContent = checkedPrice
+                                    + ' | ' 
+                                    + formattedDate
+                                    + ' | '
+                                    + checkedCPG;
+        spoolCard.appendChild(lowerRow);
+
+        const lowerButtons = document.createElement('div');
+            lowerButtons.classList.add('no-top-mar');
+            lowerButtons.classList.add('flex-row')
+            lowerButtons.style.padding = '10px';
+            lowerButtons.style.paddingLeft = '25px';
+            lowerButtons.style.paddingRight = '25px';
+
+            const archiveButton = document.createElement('button');
+                archiveButton.innerHTML = v.archived ? 'Unarchive' : 'Archive';
+                archiveButton.classList.add('buttons-filled');
+                archiveButton.classList.add('inline-button');
+                archiveButton.classList.add('oot-button-sz');
+
+                archiveButton.addEventListener('click', () => {
+                    archiveSpool(k);
+                });
+            lowerButtons.appendChild(archiveButton);
+
+            const deleteButton = document.createElement('button');
+                deleteButton.innerHTML = 'Delete';
+                deleteButton.classList.add('buttons-empty');
+                deleteButton.classList.add('inline-button');
+                deleteButton.classList.add('oot-button-sz');
+
+                deleteButton.addEventListener('click', () => {
+                    deleteSpool(k);
+                });
+            lowerButtons.appendChild(deleteButton);
+        spoolCard.appendChild(lowerButtons);
+    }
+
+    function archiveSpool(id) {
+        printTrackerJ.spools[id].archived = !(printTrackerJ.spools[id].archived);
+        saveData(printTrackerJ);
+        renderSpools();
+    }
+
+    function deleteSpool(id) {
+        if (!spoolIsUsed(id)) {
+            if (confirm('Delete this spool?: "' + printTrackerJ.spools[id].brand + ', ' + printTrackerJ.spools[id].color + '" This cannot be undone.')) {
+                delete printTrackerJ.spools[id];
+                saveData(printTrackerJ);
+                renderSpools();
+            }
+        } else {
+            alert('This spool is used in prints. Archive it instead.');
+        }
+    }
+
+    function spoolIsUsed(id) {
+        for (const [pk, pv] of Object.entries(printTrackerJ.prints)) {
+            if (pv.usage != undefined) {
+                for (const [uk, uv] of Object.entries(pv.usage)) {
+                    if (uv.spoolId == id) {
+                        return true;
+                    }
+                }
+            } else {
+                console.error('Print has no usage: ' + pk);
+                continue;
+            }
+        }
+
+        return false;
+    }
 
     function showTab(t) {
         dashboardSection.hidden = true;
