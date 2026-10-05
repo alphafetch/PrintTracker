@@ -108,7 +108,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // PRINTS SECTION
     const printPopup = document.getElementById('print-popup');
-    const filamentRowsDiv = document.getElementById('filament-rows');
 
     cancelPrintButton.addEventListener('click', () => {
         printPopup.style.display = 'none';
@@ -116,31 +115,65 @@ document.addEventListener("DOMContentLoaded", () => {
 
     var rowCount = 0;
 
+    const nameInput = document.getElementById('name-tinput');
+    const printDateInput = document.getElementById('date-tinput');
+    const linkInput = document.getElementById('link-tinput');
+
+    const filamentRowTemplate = document.getElementById('filament-row-template');
+    const filamentRowsDiv = document.getElementById('filament-rows');
+
+    const clone = document.importNode(filamentRowTemplate.content, true);
+        const spoolDropdown = clone.querySelector('select[name="spool-select"]');
+        const gramCostInput = clone.querySelector('input[type="number"]');
+        addSpoolsToDropdown(spoolDropdown);
+        spoolDropdown.style.margin = '10px';
+        spoolDropdown.style.marginRight = '5px';
+        gramCostInput.style.margin = '10px';
+        gramCostInput.style.marginLeft = '5px';
+    filamentRowsDiv.appendChild(clone);
+
+    createPrintButton.addEventListener('click', () => {   
+        const resultInputRadio1TF = document.getElementById('result-rinput1').checked;
+        const successInput = resultInputRadio1TF ? true : false; // True = success, false = failure
+
+        try {
+            if ( nameInput.value.trim() != '' &&
+                 printDateInput.checkValidity() &&
+                 spoolDropdown.value != '' &&
+                 gramCostInput.value.toString() > 0 ) {
+                let uuid = crypto.randomUUID().toString();
+                printTrackerJ.prints[uuid] = {
+                    name: nameInput.value,
+                    date: printDateInput.value,
+                    result: successInput,
+                    link: linkInput.value,
+                    usage: [{spoolId: spoolDropdown.value, grams: Number(gramCostInput.value)}]
+                };
+
+                saveData(printTrackerJ);
+                printPopup.style.display = 'none';
+                renderPrints();
+                renderSpools();
+            }
+        } catch (error) {
+            console.error(error);
+            printPopup.style.display = 'none';
+            printsCardDiv.style.display = 'none';
+            const failElem = document.createElement('p');
+                failElem.innerHTML = "Failed to save print.";
+                failElem.classList.add('fail-text');
+            printsSection.appendChild(failElem);
+        }
+    });
+
     const printsCardDiv = document.createElement('div');
         printsCardDiv.classList.add('card');
     printsSection.appendChild(printsCardDiv);
 
-    const plusPrintElem = document.createElement('button');
-        plusPrintElem.innerHTML = '+';
-        plusPrintElem.classList.add('acc-buttons');
-        plusPrintElem.addEventListener('click', () => {
-            printPopup.style.display = 'block';
-        });
-    printsCardDiv.appendChild(plusPrintElem);
-
     try {
-        if (Object.keys(printTrackerJ.prints).length > 0) {
-            Object.entries(printTrackerJ.prints).forEach(([key, value]) => {
-                showPrintCard(key, value);
-            });
-        } else {
-            const clickElem = document.createElement('p');
-                clickElem.innerHTML = "No prints yet! Click the + to start a new print!";
-                clickElem.classList.add('warn-text');
-            printsCardDiv.appendChild(clickElem);
-        }
+        renderPrints();
     } catch (error) {
-        console.error(error);   
+        console.error(error);
         printsCardDiv.hidden = true;
         const failElem = document.createElement('p');
             failElem.innerHTML = "Failed to load prints.";
@@ -179,7 +212,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     material: materialDropdown.value,
                     color: colorInput.value,
                     startGrams: gramsInput.valueAsNumber,
-                    spoolLogs: 0,
                     price: priceInput.valueAsNumber,
                     date: dateInput.value,
                     archived: false
@@ -219,7 +251,7 @@ document.addEventListener("DOMContentLoaded", () => {
         renderSpools();
     });
 
-    showTab(Sections.FILA);
+    showTab(Sections.PRINTS);
 
     function renderSpools() {
         filamentDiv.replaceChildren();
@@ -228,7 +260,7 @@ document.addEventListener("DOMContentLoaded", () => {
             plusSpoolElem.innerHTML = '+';
             plusSpoolElem.classList.add('acc-buttons');
             plusSpoolElem.addEventListener('click', () => {
-                const allInputs = document.querySelectorAll('input');
+                const allInputs = filamentAddPopup.querySelectorAll('input');
                 allInputs.forEach(input => {
                     if (input.type === 'checkbox' || input.type === 'radio') {
                         input.checked = false;
@@ -266,12 +298,105 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    function renderPrints() {
+        printsCardDiv.replaceChildren();
+
+        const plusPrintElem = document.createElement('button');
+            plusPrintElem.innerHTML = '+';
+            plusPrintElem.classList.add('acc-buttons');
+            plusPrintElem.addEventListener('click', () => {
+                const allInputs = printPopup.querySelectorAll('input');
+                allInputs.forEach(input => {
+                    if (input.type === 'checkbox' || input.type === 'radio') {
+                        input.checked = false;
+                    } else {
+                        input.value = '';
+                    }
+                });
+
+                document.getElementById('result-rinput1').checked = true;
+
+                let availSpools = 0;
+                for (const [id, spool] of Object.entries(printTrackerJ.spools)) {
+                    if (!spool.archived) {
+                        availSpools++;
+                    }
+                }
+                if (availSpools > 0) {
+                    printPopup.style.display = 'block';
+                    addSpoolsToDropdown(spoolDropdown);
+                } else {
+                    alert('Not enough spools of filament to print!');
+                }
+            });
+        printsCardDiv.appendChild(plusPrintElem);
+
+        if (Object.keys(printTrackerJ.prints).length > 0) {
+            Object.entries(printTrackerJ.prints).forEach(([key, value]) => {
+                showPrintCard(key, value);
+            });
+        } else {
+            const clickElem = document.createElement('p');
+                clickElem.innerHTML = "No prints yet! Click the + to start a new print!";
+                clickElem.classList.add('warn-text');
+            printsCardDiv.appendChild(clickElem);
+        }
+    }
+
     function saveData(d) {
         localStorage.setItem('printTracker', JSON.stringify(d));
     }
 
     function showPrintCard(k, v) {
+        const printCard = document.createElement('div');
+            printCard.classList.add('row-card');
+            printCard.id = k;
+        printsCardDiv.appendChild(printCard);
 
+        const titleOfCard = document.createElement('h2');
+            titleOfCard.textContent = v.name;
+            titleOfCard.classList.add('headers');
+            titleOfCard.classList.add('section-header');
+            titleOfCard.classList.add('no-bottom-mar');
+
+            const successBadge = document.createElement('span');
+                successBadge.textContent = v.result ? "Success" : "Failure";
+                successBadge.classList.add('badge');
+                if (v.result) { successBadge.classList.add('badge-green-override') }
+                else { successBadge.classList.add('badge-red-override') }
+                successBadge.style.color = 'var(--text)';
+                successBadge.style.marginLeft = '15px';
+            titleOfCard.appendChild(successBadge);
+        printCard.appendChild(titleOfCard);
+
+        const dateContainer = document.createElement('div');
+            dateContainer.classList.add('body-text');
+            dateContainer.style.marginBottom = '15px';
+            dateContainer.classList.add('no-top-mar');
+            dateContainer.classList.add('secondary-text');
+
+            const [yyyy, mm, dd] = v.date.split('-');
+            const formattedDate = `${mm}/${dd}/${yyyy}`;
+
+            const linkA = document.createElement('a');
+                linkA.textContent = v.link;
+                try {
+                    const linkURL = new URL(v.link);
+                    if (linkURL.protocol != 'https:' && linkURL.protocol != 'http:') {
+                        throw new Error("Invalid Link: Protocol invalid");
+                    } else {
+                        linkA.href = linkURL;
+                    }
+                } catch (error) {
+                    console.warn(error);
+                }
+                linkA.rel = "noopener noreferrer";
+                linkA.classList.add('link-text');
+                linkA.target = '_blank';
+                linkA.textContent = v.link;
+            if (linkA.textContent != '') dateContainer.append(formattedDate, ' | ', linkA);
+            else dateContainer.append(formattedDate);
+        printCard.appendChild(dateContainer);
     }
 
     function showSpoolCard(k, v) {
@@ -280,7 +405,7 @@ document.addEventListener("DOMContentLoaded", () => {
             spoolCard.id = k;
         filamentDiv.appendChild(spoolCard);
 
-        let remGramsCalc = v.startGrams - v.spoolLogs;
+        let remGramsCalc = v.startGrams - getGramUsageOfSpool(k);
 
         const titleOfCard = document.createElement('h2');
             titleOfCard.textContent = v.brand + ', ' + v.color;
@@ -385,6 +510,39 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
             lowerButtons.appendChild(deleteButton);
         spoolCard.appendChild(lowerButtons);
+    }
+
+    function getGramUsageOfSpool(id) {
+        let usageGrams = 0;
+
+        for (const [pk, pv] of Object.entries(printTrackerJ.prints)) {
+            if (pv.usage != undefined) {
+                for (const [uk, uv] of Object.entries(pv.usage)) {
+                    if (uv.spoolId == id) {
+                        usageGrams += uv.grams;
+                    }
+                }
+            } else {
+                continue;
+            }
+        }
+
+        return usageGrams;
+    }
+
+    function addSpoolsToDropdown(selElem) {
+        selElem.replaceChildren();
+        for (const [id, spool] of Object.entries(printTrackerJ.spools)) {
+            if (!spool.archived) { 
+                const remGramsCalc = spool.startGrams - getGramUsageOfSpool(id);
+                const spoolName = spool.brand + ', ' + spool.color + ': ' + spool.material.toUpperCase() + ' (' + Math.round(remGramsCalc) + 'g)';
+                const optionElem = document.createElement('option');
+                    optionElem.textContent = spoolName;
+                    optionElem.classList.add('option-input');
+                    optionElem.value = id;
+                selElem.appendChild(optionElem);
+            }
+        }
     }
 
     function archiveSpool(id) {

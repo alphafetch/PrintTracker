@@ -13,6 +13,7 @@
     --faded-accent: #F59E0B80;
     --faded-failure: #F8717180;
     --faded-purple: #8041aa80;
+    --faded-success: #4ADE8080;
 
     --font-display: 'Space Grotesk', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -248,12 +249,35 @@ input[type='date']:focus {
     height: 24px;
 }
 
+.link-text:link {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.2s ease-in-out;
+}
+
+.link-text:visited {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.2s ease-in-out;
+}
+
+.link-text:hover {
+    text-decoration: underline wavy;
+    font-weight: 900;
+}
+
 .badge-red-override {
     background-color: var(--faded-failure) !important;
 }
 
 .badge-purple-override {
     background-color: var(--faded-purple) !important;
+}
+
+.badge-green-override {
+    background-color: var(--faded-success) !important;
 }
 
 .top-mar-off {
@@ -271,6 +295,10 @@ input[type='date']:focus {
 .bolden {
     font-size: 18px !important;
     color: var(--accent) !important;
+}
+
+.no-border {
+    border: none;
 }
 
 .radio-input {

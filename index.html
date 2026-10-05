@@ -40,19 +40,22 @@
                     <p class="body-text no-pad bolden">Name:</p>
                     <input type="text" spellcheck="false" id="name-tinput" class="text-input" placeholder="e.g., Plate Scraper"> <br>
                     <p class="body-text no-pad bolden">Date:</p>
-                    <input type="date" spellcheck="false" id="date-tinput" class="date-input"> <br>
+                    <input type="date" spellcheck="false" id="date-tinput" class="date-input" required> <br>
+                    <p class="body-text no-pad bolden">Link:</p>
+                    <input type="text" spellcheck="false" id="link-tinput" class="text-input"> <br>
                     <p class="body-text no-pad bolden">Result:</p>
                     <label for="result-rinput1" class="body-text no-pad">Success</label>
-                    <input type="radio" name="result-rinput" id="result-rinput1" class="radio-input"> <br>
+                    <input type="radio" name="result-rinput" id="result-rinput1" class="radio-input"> <br> 
                     <label for="result-rinput2" class="body-text no-pad">Failure</label>
                     <input type="radio" name="result-rinput" id="result-rinput2" class="radio-input mar-off"> <br>
                     <p class="body-text no-pad bolden">Filament Used:</p>
                     <div id="filament-rows" class="card">
                         <template id="filament-row-template">
                             <div class="card inline-row">
-                                <select name="spool-select" id="spool-select" class="dropdown">
+                                <select name="spool-select" class="spool-select dropdown">
                                     <!-- User's filaments will go here -->
                                 </select>
+                                <input type="number" min="0" class="filament-selector-input text-input" placeholder="e.g., 5">
                             </div>
                         </template>
                         <!-- Filament rows go here -->
@@ -93,7 +96,7 @@
                     <p class="body-text no-pad bolden">Price:</p>
                     <input type="number" id="price-ninput" class="number-input" min="0" step="0.01" placeholder="e.g., $9.57">
                     <p class="body-text no-pad bolden">Date:</p>
-                    <input type="date" spellcheck="false" id="date-dinput" class="date-input"> <br>
+                    <input type="date" spellcheck="false" id="date-dinput" class="date-input" required> <br>
 
                     <br>
                     <button id="add-spool-button" class="buttons-filled inline-button">Add Spool</button>
