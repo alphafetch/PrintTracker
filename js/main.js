@@ -396,6 +396,25 @@ function showPrintCard(k, v) {
         if (linkA.textContent != '') dateContainer.append(formattedDate, ' | ', linkA);
         else dateContainer.append(formattedDate);
     printCard.appendChild(dateContainer);
+
+    const lowerButtons = document.createElement('div');
+        lowerButtons.classList.add('no-top-mar');
+        lowerButtons.classList.add('flex-row')
+        lowerButtons.style.padding = '10px';
+        lowerButtons.style.paddingLeft = '25px';
+        lowerButtons.style.paddingRight = '25px';
+
+        const deleteButton = document.createElement('button');
+            deleteButton.innerHTML = 'Delete';
+            deleteButton.classList.add('buttons-filled');
+            deleteButton.classList.add('inline-button');
+            deleteButton.classList.add('oot-button-sz');
+
+            deleteButton.addEventListener('click', () => {
+                deletePrint(k);
+            });
+        lowerButtons.appendChild(deleteButton);
+    printCard.appendChild(lowerButtons);
 }
 
 function showSpoolCard(k, v) {
@@ -559,6 +578,14 @@ function deleteSpool(id) {
         }
     } else {
         alert('This spool is used in prints. Archive it instead.');
+    }
+}
+
+function deletePrint(id) {
+    if (confirm('Delete this print?: "' + printTrackerJ.prints[id].name + '" This cannot be undone.')) {
+        delete printTrackerJ.prints[id];
+        saveData(printTrackerJ);
+        renderPrints();
     }
 }
 
