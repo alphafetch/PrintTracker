@@ -339,7 +339,7 @@ input[type='date']:focus {
 
 .popup-content {
     background-color: var(--background);
-    margin: 15% auto;
+    margin: 8% auto;
     padding: 20px;
     border-radius: 8px;
     width: 40%;
