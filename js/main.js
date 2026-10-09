@@ -395,6 +395,25 @@ function showPrintCard(k, v) {
             linkA.textContent = v.link;
         if (linkA.textContent != '') dateContainer.append(formattedDate, ' | ', linkA);
         else dateContainer.append(formattedDate);
+
+        let displayFilaString = '';
+        if ((v.usage ?? []).length > 0) {
+            let i = 0;
+            for (const entry of v.usage) {
+                const spool = printTrackerJ.spools[entry.spoolId];
+                if (spool) {
+                    displayFilaString += spool.brand + ', ' + spool.color + ': ' + entry.grams + 'g';
+                    if (i < v.usage.length - 1) { displayFilaString += ' & '; }
+                } else {
+                    displayFilaString += 'Deleted spool: ' + entry.grams + 'g';
+                    if (i < v.usage.length - 1) { displayFilaString += ' & '; }
+                }
+
+                i++;
+            }
+
+            dateContainer.append(' | ', displayFilaString);
+        }
     printCard.appendChild(dateContainer);
 
     const lowerButtons = document.createElement('div');
@@ -586,6 +605,7 @@ function deletePrint(id) {
         delete printTrackerJ.prints[id];
         saveData(printTrackerJ);
         renderPrints();
+        renderSpools();
     }
 }
 
