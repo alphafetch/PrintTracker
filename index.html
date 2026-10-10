@@ -1,9 +1,5 @@
 <!DOCTYPE html>
-<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
-<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
-<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
-<!--[if gt IE 8]>      <html class="no-js"> <!--<![endif]-->
-<html>
+<html lang="en">
     <head>
         <meta charset="utf-8">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -17,70 +13,75 @@
         <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet">
     </head>
     <body>
-        <!--[if lt IE 7]>
-            <p class="browsehappy">You are using an <strong>outdated</strong> browser. Please <a href="#">upgrade your browser</a> to improve your experience.</p>
-        <![endif]-->
-        
         <div id="header">
-            <!-- Multipage Header Section -->
+            <!-- Tab buttons are created by js/main.js -->
         </div>
+
         <div id="dashboard" class="section">
-            <!-- Dashboard Section -->
             <h2 class="headers section-header">Dashboard</h2>
+            <div id="dashboard-content"></div>
         </div>
+
         <div id="prints" class="section">
-            <!-- Prints Section
-                contains print info, saved to localStorage 
-            -->
             <h2 class="headers section-header">Prints</h2>
 
-            <div id="print-popup" class="popup">
+            <div id="print-popup" class="popup" role="dialog" aria-modal="true" aria-labelledby="print-popup-title">
                 <div class="popup-content">
-                    <h3 class="headers mono-imp no-pad top-mar-off">Create Print</h3>
-                    <p class="body-text no-pad bolden">Name:</p>
-                    <input type="text" spellcheck="false" id="name-tinput" class="text-input" placeholder="e.g., Plate Scraper"> <br>
-                    <p class="body-text no-pad bolden">Date:</p>
-                    <input type="date" spellcheck="false" id="date-tinput" class="date-input" required> <br>
-                    <p class="body-text no-pad bolden">Link:</p>
-                    <input type="text" spellcheck="false" id="link-tinput" class="text-input"> <br>
-                    <p class="body-text no-pad bolden">Result:</p>
+                    <h3 id="print-popup-title" class="headers mono-imp no-pad top-mar-off">Create Print</h3>
+
+                    <label for="name-tinput" class="body-text no-pad bolden field-label">Name:</label>
+                    <input type="text" spellcheck="false" id="name-tinput" class="text-input" maxlength="80" placeholder="e.g., Plate Scraper">
+
+                    <label for="date-tinput" class="body-text no-pad bolden field-label">Date:</label>
+                    <input type="date" id="date-tinput" class="date-input" required>
+
+                    <label for="link-tinput" class="body-text no-pad bolden field-label">Link (optional):</label>
+                    <input type="text" spellcheck="false" id="link-tinput" class="text-input" maxlength="300" placeholder="e.g., https://makerworld.com/...">
+
+                    <p class="body-text no-pad bolden field-label">Result:</p>
                     <label for="result-rinput1" class="body-text no-pad">Success</label>
-                    <input type="radio" name="result-rinput" id="result-rinput1" class="radio-input"> <br> 
+                    <input type="radio" name="result-rinput" id="result-rinput1" class="radio-input" checked> <br>
                     <label for="result-rinput2" class="body-text no-pad">Failure</label>
                     <input type="radio" name="result-rinput" id="result-rinput2" class="radio-input mar-off"> <br>
-                    <p class="body-text no-pad bolden">Filament Used:</p>
-                    <div id="filament-rows" class="card">
+
+                    <p class="body-text no-pad bolden field-label">Filament Used (grams):</p>
+                    <div id="filament-rows" class="filament-rows-box">
                         <template id="filament-row-template">
-                            <div class="card inline-row">
-                                <select name="spool-select" class="spool-select dropdown">
-                                    <!-- User's filaments will go here -->
-                                </select>
-                                <input type="number" min="0" class="filament-selector-input text-input" placeholder="e.g., 5">
+                            <div class="filament-row">
+                                <select name="spool-select" class="spool-select dropdown" aria-label="Spool"></select>
+                                <input type="number" min="0" step="any" class="number-input" placeholder="grams, e.g., 12.4" aria-label="Grams used">
+                                <button type="button" class="row-remove-button" title="Remove this filament" aria-label="Remove this filament">&times;</button>
+                                <p class="row-hint warn-text no-pad" hidden></p>
                             </div>
                         </template>
-                        <!-- Filament rows go here -->
+                        <div id="filament-row-list"></div>
+                        <button type="button" id="add-filament-row-button" class="add-row-button">+ Add another filament</button>
                     </div>
 
+                    <p id="print-error" class="error-text" role="alert" hidden></p>
+
                     <br>
-                    <button id="add-print-button" class="buttons-filled inline-button">Create Print</button>
-                    <button id="cancel-print-button" class="buttons-empty inline-button">Cancel</button>
+                    <button type="button" id="add-print-button" class="buttons-filled inline-button">Create Print</button>
+                    <button type="button" id="cancel-print-button" class="buttons-empty inline-button">Cancel</button>
                 </div>
             </div>
         </div>
+
         <div id="filament" class="section">
-            <!-- Filament Manager Section -->
             <div class="section-top">
                 <h2 class="headers section-header">Filament</h2>
-                <label for="hide-archived" class="warn-text no-pad pad-right right-align-block">Hide archived</label>
-                <input type="checkbox" class="radio-input right-align-block" name="hide-archived" id="archive-off-checkbox">
+                <label for="archive-off-checkbox" class="warn-text no-pad pad-right right-align-block">Hide archived</label>
+                <input type="checkbox" class="radio-input" name="hide-archived" id="archive-off-checkbox">
             </div>
 
-            <div id="filament-add-popup" class="popup">
+            <div id="filament-add-popup" class="popup" role="dialog" aria-modal="true" aria-labelledby="spool-popup-title">
                 <div id="filament-add-popup-content" class="popup-content">
-                    <h3 class="headers mono-imp no-pad top-mar-off">Add Spool</h3>
-                    <p class="body-text no-pad bolden">Brand:</p>
-                    <input type="text" spellcheck="false" id="brand-tinput" class="text-input" placeholder="e.g., Bambu Lab"> <br>
-                    <p class="body-text no-pad bolden">Material:</p>
+                    <h3 id="spool-popup-title" class="headers mono-imp no-pad top-mar-off">Add Spool</h3>
+
+                    <label for="brand-tinput" class="body-text no-pad bolden field-label">Brand:</label>
+                    <input type="text" spellcheck="false" id="brand-tinput" class="text-input" maxlength="40" placeholder="e.g., Bambu Lab">
+
+                    <label for="material-dropdown" class="body-text no-pad bolden field-label">Material:</label>
                     <select name="material-dropdown" id="material-dropdown" class="dropdown">
                         <option value="pla" class="option-input">PLA</option>
                         <option value="petg" class="option-input">PETG</option>
@@ -89,29 +90,60 @@
                         <option value="tpu" class="option-input">TPU</option>
                         <option value="other" class="option-input">Other</option>
                     </select>
-                    <p class="body-text no-pad bolden">Color:</p>
-                    <input type="text" spellcheck="false" id="color-tinput" class="text-input" placeholder="e.g., Black">
-                    <p class="body-text no-pad bolden">Weight (grams):</p>
-                    <input type="number" id="grams-ninput" class="number-input" min="0" step="0.01" placeholder="e.g., 370">
-                    <p class="body-text no-pad bolden">Price:</p>
-                    <input type="number" id="price-ninput" class="number-input" min="0" step="0.01" placeholder="e.g., $9.57">
-                    <p class="body-text no-pad bolden">Date:</p>
-                    <input type="date" spellcheck="false" id="date-dinput" class="date-input" required> <br>
+
+                    <label for="color-tinput" class="body-text no-pad bolden field-label">Color:</label>
+                    <input type="text" spellcheck="false" id="color-tinput" class="text-input" maxlength="40" placeholder="e.g., Black">
+
+                    <label for="grams-ninput" class="body-text no-pad bolden field-label">Weight (grams):</label>
+                    <input type="number" id="grams-ninput" class="number-input" min="0" step="0.01" placeholder="e.g., 1000">
+
+                    <label for="price-ninput" class="body-text no-pad bolden field-label">Price (optional):</label>
+                    <input type="number" id="price-ninput" class="number-input" min="0" step="0.01" placeholder="e.g., 19.99">
+
+                    <label for="date-dinput" class="body-text no-pad bolden field-label">Date bought:</label>
+                    <input type="date" id="date-dinput" class="date-input" required>
+
+                    <p id="spool-error" class="error-text" role="alert" hidden></p>
 
                     <br>
-                    <button id="add-spool-button" class="buttons-filled inline-button">Add Spool</button>
-                    <button id="cancel-spool-button" class="buttons-empty inline-button">Cancel</button>
+                    <button type="button" id="add-spool-button" class="buttons-filled inline-button">Add Spool</button>
+                    <button type="button" id="cancel-spool-button" class="buttons-empty inline-button">Cancel</button>
                 </div>
             </div>
         </div>
+
         <div id="queue" class="section">
-            <!-- Print Queue Section -->
             <h2 class="headers section-header">Print Queue</h2>
+            <div class="card queue-card">
+                <div class="queue-add">
+                    <input type="text" id="queue-name-input" class="text-input" maxlength="80" placeholder="What do you want to print?" aria-label="Queue item name">
+                    <input type="text" id="queue-link-input" class="text-input" maxlength="300" placeholder="Link (optional)" aria-label="Queue item link">
+                    <button type="button" id="queue-add-button" class="buttons-filled">Add</button>
+                </div>
+                <p id="queue-error" class="error-text queue-error" role="alert" hidden></p>
+                <div id="queue-list"></div>
+                <div class="queue-footer">
+                    <button type="button" id="queue-clear-done-button" class="small-button">Clear done</button>
+                </div>
+            </div>
         </div>
+
         <div id="data" class="section">
-            <!-- Data Export Section -->
             <h2 class="headers section-header">Data Export</h2>
+            <div class="card">
+                <p id="data-summary" class="body-text"></p>
+                <div class="data-actions">
+                    <button type="button" id="export-button" class="buttons-filled">Export JSON</button>
+                    <button type="button" id="import-button" class="buttons-empty">Import JSON</button>
+                    <input type="file" id="import-file" accept="application/json,.json" hidden>
+                    <button type="button" id="clear-data-button" class="buttons-empty buttons-danger">Delete all data</button>
+                </div>
+                <p id="data-message" class="body-text" role="status" hidden></p>
+                <p class="body-text secondary-text">Everything is saved only in this browser. Clearing site data or switching browsers erases it, so export a backup now and then. Importing replaces all current data.</p>
+            </div>
         </div>
+
+        <div id="toast" role="status" aria-live="polite"></div>
 
         <script src="js/main.js" type="module"></script>
     </body>
