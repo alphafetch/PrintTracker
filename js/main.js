@@ -122,6 +122,7 @@ const filamentRowTemplate = document.getElementById('filament-row-template');
 const filamentRowsDiv = document.getElementById('filament-rows');
 
 addFilamentRow(filamentRowsDiv);
+addPlusFilamentRows(filamentRowsDiv, false);
 
 createPrintButton.addEventListener('click', () => {   
     const resultInputRadio1TF = document.getElementById('result-rinput1').checked;
@@ -315,7 +316,6 @@ function renderPrints() {
             }
             if (availSpools > 0) {
                 printPopup.style.display = 'block';
-                addSpoolsToDropdown(spoolDropdown);
             } else {
                 alert('Not enough spools of filament to print!');
             }
@@ -630,6 +630,35 @@ function addFilamentRow(filaRowsDiv) {
         filaRowsDiv.style.margin = '5px';
         filaRowsDiv.style.width = '100%';
     filaRowsDiv.appendChild(clone);
+
+    addSpoolsToDropdown(spoolDropdown);
+}
+
+function addPlusFilamentRows(filaRowsDiv, reRender) {
+    if (reRender) {
+        const delFilamentUsedButton = document.getElementById('filament-used-button');
+        delFilamentUsedButton.remove();
+    }
+
+    const addFilamentUsedButton = document.createElement('button');
+        addFilamentUsedButton.innerHTML = '+';
+        addFilamentUsedButton.classList.add('acc-buttons-inv');
+        addFilamentUsedButton.id = 'filament-used-button';
+        addFilamentUsedButton.addEventListener('click', () => {
+            let availSpools = 0;
+            for (const [id, spool] of Object.entries(printTrackerJ.spools)) {
+                if (!spool.archived) {
+                    availSpools++;
+                }
+            }
+            if (availSpools > 0) {
+                addFilamentRow(filamentRowsDiv);
+                addPlusFilamentRows(filaRowsDiv, true);
+            } else {
+                alert('Not enough spools of filament to add a spool!');
+            }
+        });
+    filaRowsDiv.appendChild(addFilamentUsedButton);
 }
 
 function showTab(t) {
