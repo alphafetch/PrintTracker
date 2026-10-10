@@ -15,6 +15,13 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400..700&family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <div id="bg" class="bgp-layers" aria-hidden="true">
+        <span class="bg-blob b1"></span>
+        <span class="bg-blob b2"></span>
+        <span class="bg-blob b3"></span>
+        <span class="bg-pattern"></span>
+    </div>
+
     <div id="topbar">
         <div class="topbar-inner">
             <h1 id="main-header" tabindex="0" role="link" title="Go to the dashboard"><span id="brand-icon" aria-hidden="true"></span>Print Tracker</h1>
@@ -115,7 +122,7 @@
             <div class="page-head">
                 <div>
                     <h2 id="data-title" class="page-title">Data Export</h2>
-                    <p class="page-sub">Back up, move or clear everything stored in this browser.</p>
+                    <p class="page-sub">Back up, move or clear your prints, spools and queue. Your settings stay put.</p>
                 </div>
             </div>
             <div class="panel">
@@ -132,11 +139,24 @@
             </div>
             <div class="panel panel-danger">
                 <h3 class="panel-title">Danger zone</h3>
-                <p class="body-text secondary-text">Permanently removes every print, spool and queue item from this browser.</p>
+                <p class="body-text secondary-text">Permanently removes every print, spool, queue item and upkeep task from this browser. Your settings are kept.</p>
                 <div class="data-actions">
                     <button type="button" id="clear-data-button" class="btn btn-danger">Delete all data</button>
                 </div>
             </div>
+        </section>
+
+        <section id="settings" class="section" aria-labelledby="settings-title">
+            <div class="page-head">
+                <div>
+                    <h2 id="settings-title" class="page-title">Settings</h2>
+                    <p class="page-sub">Your printer, how the app looks, and how it behaves. Saved automatically.</p>
+                </div>
+            </div>
+            <div id="settings-tabs" class="subtabs" role="tablist" aria-label="Settings sections"></div>
+            <div id="settings-printer" class="subpanel" role="tabpanel"></div>
+            <div id="settings-appearance" class="subpanel" role="tabpanel" hidden></div>
+            <div id="settings-preferences" class="subpanel" role="tabpanel" hidden></div>
         </section>
     </main>
 

@@ -11,13 +11,17 @@
      spools: { <id>: { brand, material, color, hex ('#rrggbb' or ''), startGrams,
                        price (number|null), date, archived } },
      queue:  { <id>: { name, link, done } },
+     maintenance: { <id>: { name, unit: 'hours'|'days'|'prints', every, lastDate, atHours, atPrints } },
+     settings: { accent, background, bgStrength, animate, density, currency, dateFormat, lowPercent,
+                 defaultMaterial, defaultSpoolGrams, backupDays, shortcuts,
+                 printer: { model, nickname, nozzle, date, price, watts, kwhPrice } },
      hideArchived: false,
-     theme: 'dark' | 'light' | null,
+     theme: 'dark' | 'light' | null (null = follow the system),
      lastExported: null
    }
 
-   `minutes`, `notes`, `hex` and `theme` are optional additions; older saves
-   without them load fine.
+   `minutes`, `notes`, `hex`, `theme`, `settings` and `maintenance` are optional
+   additions; older saves without them load fine.
 
    Remaining grams for a spool are never stored: they are calculated from
    the spool's starting weight minus the grams logged in prints.
@@ -28,8 +32,6 @@
 const STORAGE_KEY = 'printTracker';
 const CORRUPT_KEY = 'printTracker.corrupt';
 const SCHEMA_VERSION = 1;
-const LOW_FRACTION = 0.25;   // at or below this share left: "low"
-const WARN_FRACTION = 0.5;   // at or below this share left: warning color
 const MAX_IMPORT_BYTES = 4 * 1024 * 1024;
 const MAX_MINUTES = 9999 * 60 + 59;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -60,16 +62,46 @@ const Sections = Object.freeze({
     PRINTS: 'prints',
     FILA: 'filament',
     QUEUE: 'queue',
-    DATA: 'data'
+    DATA: 'data',
+    SETTINGS: 'settings'
 });
 
 const TABS = [
-    { label: 'Dashboard',   idPrefix: 'dash',   section: Sections.DASH,   icon: 'dashboard' },
-    { label: 'Prints',      idPrefix: 'prints', section: Sections.PRINTS, icon: 'cube' },
-    { label: 'Filament',    idPrefix: 'fila',   section: Sections.FILA,   icon: 'spool' },
-    { label: 'Print Queue', idPrefix: 'queue',  section: Sections.QUEUE,  icon: 'list' },
-    { label: 'Data Export', idPrefix: 'data',   section: Sections.DATA,   icon: 'download' }
+    { label: 'Dashboard', idPrefix: 'dash',     section: Sections.DASH,     icon: 'dashboard' },
+    { label: 'Prints',    idPrefix: 'prints',   section: Sections.PRINTS,   icon: 'cube' },
+    { label: 'Filament',  idPrefix: 'fila',     section: Sections.FILA,     icon: 'spool' },
+    { label: 'Queue',     idPrefix: 'queue',    section: Sections.QUEUE,    icon: 'list' },
+    { label: 'Data',      idPrefix: 'data',     section: Sections.DATA,     icon: 'download' },
+    { label: 'Settings',  idPrefix: 'settings', section: Sections.SETTINGS, icon: 'gear' }
 ];
+
+// Accent colors. Each has a dark-theme and a light-theme variant so text stays readable.
+const ACCENTS = {
+    amber:   { label: 'Amber',   dark: { accent: '#f59e0b', strong: '#fbbf24', link: '#fbbf24' }, light: { accent: '#f59e0b', strong: '#d97706', link: '#b45309' } },
+    sky:     { label: 'Sky',     dark: { accent: '#38bdf8', strong: '#7dd3fc', link: '#7dd3fc' }, light: { accent: '#0ea5e9', strong: '#0284c7', link: '#0369a1' } },
+    emerald: { label: 'Emerald', dark: { accent: '#34d399', strong: '#6ee7b7', link: '#6ee7b7' }, light: { accent: '#10b981', strong: '#059669', link: '#047857' } },
+    teal:    { label: 'Teal',    dark: { accent: '#2dd4bf', strong: '#5eead4', link: '#5eead4' }, light: { accent: '#14b8a6', strong: '#0d9488', link: '#0f766e' } },
+    violet:  { label: 'Violet',  dark: { accent: '#a78bfa', strong: '#c4b5fd', link: '#c4b5fd' }, light: { accent: '#8b5cf6', strong: '#7c3aed', link: '#6d28d9' } },
+    rose:    { label: 'Rose',    dark: { accent: '#fb7185', strong: '#fda4af', link: '#fda4af' }, light: { accent: '#f43f5e', strong: '#e11d48', link: '#be123c' } }
+};
+
+const BACKGROUNDS = [
+    { key: 'layers',    label: 'Layers' },
+    { key: 'honeycomb', label: 'Honeycomb' },
+    { key: 'blueprint', label: 'Blueprint' },
+    { key: 'dots',      label: 'Dot grid' },
+    { key: 'aurora',    label: 'Glow' },
+    { key: 'none',      label: 'Plain' }
+];
+
+// Bambu Lab models (names as listed on Wikipedia's Bambu Lab article).
+const PRINTER_MODELS = ['A1 mini', 'A1', 'A2L', 'P1P', 'P1S', 'P2S', 'X1', 'X1 Carbon', 'X1E', 'X2D',
+    'H2D', 'H2D Pro', 'H2S', 'H2C', 'Other'];
+const NOZZLES = ['0.2', '0.4', '0.6', '0.8'];
+const CURRENCIES = ['$', '\u20AC', '\u00A3', '\u00A5', '\u20B9', '\u20A9', 'C$', 'A$', 'CHF', 'kr', 'z\u0142'];
+const SUFFIX_CURRENCIES = ['kr', 'z\u0142'];
+const DATE_FORMATS = ['mdy', 'dmy', 'iso'];
+const UNIT_LABELS = { hours: 'hours', days: 'days', prints: 'prints' };
 
 // Simple stroke icons (24x24 viewBox). Built with createElementNS, never innerHTML.
 const ICONS = {
@@ -83,7 +115,13 @@ const ICONS = {
     plus: ['M12 5v14', 'M5 12h14'],
     search: ['M11 4a7 7 0 100 14 7 7 0 000-14z', 'M21 21l-4.3-4.3'],
     alert: ['M12 3l10 18H2z', 'M12 10v5', 'M12 18h.01'],
-    clock: ['M12 3a9 9 0 100 18 9 9 0 000-18z', 'M12 7v5l3 2']
+    clock: ['M12 3a9 9 0 100 18 9 9 0 000-18z', 'M12 7v5l3 2'],
+    gear: ['M12 15a3 3 0 100-6 3 3 0 000 6z', 'M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z'],
+    wrench: ['M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z'],
+    check: ['M5 13l4 4L19 7'],
+    star: ['M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z'],
+    lock: ['M6 11h12v10H6z', 'M8 11V7a4 4 0 118 0v4'],
+    bolt: ['M13 2L4 14h7l-1 8 9-12h-7z']
 };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -145,15 +183,40 @@ function isValidDate(s) {
 
 function formatDate(iso) {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(typeof iso === 'string' ? iso : '');
-    return m ? `${m[2]}/${m[3]}/${m[1]}` : 'No date';
+    if (!m) return 'No date';
+    switch (state.settings.dateFormat) {
+        case 'dmy': return `${m[3]}/${m[2]}/${m[1]}`;
+        case 'iso': return `${m[1]}-${m[2]}-${m[3]}`;
+        default: return `${m[2]}/${m[3]}/${m[1]}`;
+    }
+}
+
+/** Whole days from one ISO date to another (negative if `to` is earlier). */
+function daysBetween(fromIso, toIso) {
+    const a = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fromIso);
+    const b = /^(\d{4})-(\d{2})-(\d{2})$/.exec(toIso);
+    if (!a || !b) return 0;
+    return Math.round((Date.UTC(+b[1], +b[2] - 1, +b[3]) - Date.UTC(+a[1], +a[2] - 1, +a[3])) / 86400000);
 }
 
 function fmtGrams(n) {
     return String(Math.round(n * 10) / 10);
 }
 
-function fmtMoney(n) {
-    return '$' + n.toFixed(2);
+function fmtMoney(n, digits = 2) {
+    const sym = state.settings.currency;
+    const text = n.toFixed(digits);
+    if (SUFFIX_CURRENCIES.includes(sym)) return `${text} ${sym}`;
+    return sym.length > 1 && /^[A-Z]{3}$/.test(sym) ? `${sym} ${text}` : sym + text;
+}
+
+function fmtNum(n) {
+    return String(Math.round(n * 10) / 10);
+}
+
+function clampNum(v, min, max, fallback) {
+    const n = typeof v === 'string' && v.trim() === '' ? NaN : Number(v);
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 }
 
 function fmtDuration(minutes) {
@@ -279,12 +342,84 @@ function notify(message, options = false) {
 
 // ---------- State and storage ----------
 
+function defaultSettings() {
+    return {
+        accent: 'amber',
+        background: 'layers',
+        bgStrength: 60,
+        animate: true,
+        density: 'comfortable',
+        currency: '$',
+        dateFormat: 'mdy',
+        lowPercent: 25,
+        defaultMaterial: 'pla',
+        defaultSpoolGrams: 1000,
+        backupDays: 30,
+        shortcuts: true,
+        printer: { model: '', nickname: '', nozzle: '0.4', date: '', price: null, watts: 0, kwhPrice: 0 }
+    };
+}
+
+/** Turn anything (including junk from an import) into a complete, valid settings object. */
+function cleanSettings(raw) {
+    const d = defaultSettings();
+    const s = isObject(raw) ? raw : {};
+    const p = isObject(s.printer) ? s.printer : {};
+    return {
+        accent: Object.prototype.hasOwnProperty.call(ACCENTS, s.accent) ? s.accent : d.accent,
+        background: BACKGROUNDS.some((b) => b.key === s.background) ? s.background : d.background,
+        bgStrength: Math.round(clampNum(s.bgStrength, 0, 100, d.bgStrength)),
+        animate: typeof s.animate === 'boolean' ? s.animate : d.animate,
+        density: s.density === 'compact' ? 'compact' : 'comfortable',
+        currency: CURRENCIES.includes(s.currency) ? s.currency : d.currency,
+        dateFormat: DATE_FORMATS.includes(s.dateFormat) ? s.dateFormat : d.dateFormat,
+        lowPercent: Math.round(clampNum(s.lowPercent, 5, 50, d.lowPercent)),
+        defaultMaterial: [...KNOWN_MATERIALS, 'other'].includes(s.defaultMaterial) ? s.defaultMaterial : d.defaultMaterial,
+        defaultSpoolGrams: Math.round(clampNum(s.defaultSpoolGrams, 0, 100000, d.defaultSpoolGrams)),
+        backupDays: Math.round(clampNum(s.backupDays, 0, 365, d.backupDays)),
+        shortcuts: typeof s.shortcuts === 'boolean' ? s.shortcuts : d.shortcuts,
+        printer: {
+            model: PRINTER_MODELS.includes(p.model) ? p.model : '',
+            nickname: cleanText(p.nickname, 40),
+            nozzle: NOZZLES.includes(String(p.nozzle)) ? String(p.nozzle) : d.printer.nozzle,
+            date: isValidDate(p.date) ? p.date : '',
+            price: typeof p.price === 'number' && p.price >= 0 && p.price <= 10000000 ? p.price : null,
+            watts: Math.round(clampNum(p.watts, 0, 5000, 0)),
+            kwhPrice: Math.round(clampNum(p.kwhPrice, 0, 100, 0) * 1000) / 1000
+        }
+    };
+}
+
+/** Clean the maintenance list. Entries that cannot be repaired are dropped. */
+function cleanMaintenance(raw) {
+    const out = {};
+    if (!isObject(raw)) return out;
+    for (const [id, t] of Object.entries(raw)) {
+        if (!isSafeId(id) || !isObject(t)) continue;
+        const name = cleanText(t.name, 60);
+        const every = Number(t.every);
+        if (name === '' || !Object.prototype.hasOwnProperty.call(UNIT_LABELS, t.unit)) continue;
+        if (!Number.isFinite(every) || every <= 0 || every > 1000000) continue;
+        out[id] = {
+            name,
+            unit: t.unit,
+            every,
+            lastDate: isValidDate(t.lastDate) ? t.lastDate : todayLocal(),
+            atHours: clampNum(t.atHours, 0, 10000000, 0),
+            atPrints: Math.round(clampNum(t.atPrints, 0, 10000000, 0))
+        };
+    }
+    return out;
+}
+
 function emptyState() {
     return {
         schemaVersion: SCHEMA_VERSION,
         prints: {},
         spools: {},
         queue: {},
+        maintenance: {},
+        settings: defaultSettings(),
         hideArchived: false,
         theme: null,
         lastExported: null
@@ -298,6 +433,8 @@ function normalizeState(data) {
         prints: isObject(s.prints) ? s.prints : {},
         spools: isObject(s.spools) ? s.spools : {},
         queue: isObject(s.queue) ? s.queue : {},
+        maintenance: cleanMaintenance(s.maintenance),
+        settings: cleanSettings(s.settings),
         hideArchived: Boolean(s.hideArchived),
         theme: s.theme === 'light' || s.theme === 'dark' ? s.theme : null,
         lastExported: typeof s.lastExported === 'string' ? s.lastExported : null
@@ -361,6 +498,22 @@ function activeSpools() {
     return Object.entries(state.spools).filter(([, s]) => isObject(s) && !s.archived);
 }
 
+function lowFraction() {
+    return state.settings.lowPercent / 100;
+}
+
+function warnFraction() {
+    return Math.max(0.5, lowFraction() + 0.15);
+}
+
+/** Estimated electricity cost of one print (needs a print time, watts and a kWh price). */
+function energyCostOfPrint(print) {
+    const { watts, kwhPrice } = state.settings.printer;
+    const minutes = validMinutes(Number(print && print.minutes));
+    if (!minutes || !(watts > 0) || !(kwhPrice > 0)) return 0;
+    return (minutes / 60) * (watts / 1000) * kwhPrice;
+}
+
 function remainingOf(id, spool) {
     return (Number(spool.startGrams) || 0) - gramsUsedOfSpool(id);
 }
@@ -390,12 +543,14 @@ function calcStats() {
 
     let grams = 0;
     let usedCost = 0;
+    let energyCost = 0;
     let minutes = 0;
     const byMaterial = {};
     const byMonth = {};
 
     for (const p of prints) {
         minutes += Number(p.minutes) > 0 ? Number(p.minutes) : 0;
+        energyCost += energyCostOfPrint(p);
         for (const u of usageOf(p)) {
             const g = Number(u.grams) || 0;
             grams += g;
@@ -428,13 +583,13 @@ function calcStats() {
         const start = Number(s.startGrams) || 0;
         const left = start - gramsUsedOfSpool(id);
         gramsLeft += Math.max(0, left);
-        if (start > 0 && left / start <= LOW_FRACTION) lowSpools.push({ id, spool: s, left });
+        if (start > 0 && left / start <= lowFraction()) lowSpools.push({ id, spool: s, left });
     }
     lowSpools.sort((a, b) => a.left - b.left);
 
     return {
         total, succeeded, failed: total - succeeded,
-        grams, usedCost, spent, minutes, gramsLeft,
+        grams, usedCost, energyCost, spent, minutes, gramsLeft,
         costPerGram: pricedGrams > 0 ? spent / pricedGrams : null,
         hasPrices: spools.some(([, s]) => Number.isFinite(s.price)),
         byMaterial, byMonth, lowSpools,
@@ -454,9 +609,28 @@ function currentTheme() {
     return 'dark';
 }
 
+function hexToRgba(hex, alpha) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+/** Apply theme, accent color, background style, motion and density to the page. */
 function applyTheme() {
     const theme = currentTheme();
-    document.documentElement.dataset.theme = theme;
+    const set = state.settings;
+    const root = document.documentElement;
+    root.dataset.theme = theme;
+    root.dataset.bg = set.background;
+    root.dataset.motion = set.animate ? 'on' : 'off';
+    root.dataset.density = set.density;
+    root.style.setProperty('--bg-strength', String(set.bgStrength / 100));
+    const accent = ACCENTS[set.accent][theme];
+    root.style.setProperty('--accent', accent.accent);
+    root.style.setProperty('--accent-strong', accent.strong);
+    root.style.setProperty('--link', accent.link);
+    root.style.setProperty('--accent-soft', hexToRgba(accent.accent, theme === 'light' ? 0.16 : 0.14));
+    const bg = $('bg');
+    if (bg) bg.className = 'bgp-' + set.background;
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', theme === 'light' ? '#f4f5f9' : '#0f172a');
     const button = $('theme-button');
@@ -473,7 +647,8 @@ const sectionEls = {
     [Sections.PRINTS]: $('prints'),
     [Sections.FILA]: $('filament'),
     [Sections.QUEUE]: $('queue'),
-    [Sections.DATA]: $('data')
+    [Sections.DATA]: $('data'),
+    [Sections.SETTINGS]: $('settings')
 };
 const tabButtons = {};
 
@@ -496,19 +671,23 @@ function buildHeader() {
         b.id = tab.idPrefix + '-button';
         b.appendChild(icon(tab.icon));
         b.appendChild(h('span', 'tab-label', tab.label));
+        b.title = tab.label;
         b.addEventListener('click', () => showTab(tab.section));
         headerEl.appendChild(b);
         tabButtons[tab.section] = b;
     }
 
-    $('theme-button').addEventListener('click', () => {
-        state.theme = currentTheme() === 'light' ? 'dark' : 'light';
-        saveState();
-        applyTheme();
-    });
+    $('theme-button').addEventListener('click', toggleTheme);
 }
 
-function showTab(section) {
+function toggleTheme() {
+    state.theme = currentTheme() === 'light' ? 'dark' : 'light';
+    saveState();
+    applyTheme();
+    syncAllSettings();
+}
+
+function showTab(section, { updateAddress = true } = {}) {
     if (!sectionEls[section]) {
         console.error('showTab called with an unknown section:', section);
         section = Sections.DASH;
@@ -521,6 +700,11 @@ function showTab(section) {
         button.classList.toggle('active', active);
         if (active) button.setAttribute('aria-current', 'page');
         else button.removeAttribute('aria-current');
+    }
+    if (updateAddress) {
+        try {
+            history.replaceState(null, '', '#' + section);
+        } catch (error) { /* the address bar is a convenience only */ }
     }
 }
 
@@ -541,6 +725,7 @@ function renderAll() {
     safeRender('spools', renderSpools);
     safeRender('the queue', renderQueue);
     safeRender('data info', renderData);
+    safeRender('maintenance', renderMaintenanceSettings);
 }
 
 function plural(n, word, pluralWord) {
@@ -602,6 +787,9 @@ function renderDashboard() {
         return;
     }
 
+    const banner = buildBackupBanner();
+    if (banner) root.appendChild(banner);
+
     // --- Stat cards ---
     const rate = stats.total > 0 ? stats.succeeded / stats.total : 0;
     const grid = h('div', 'stat-grid');
@@ -622,9 +810,11 @@ function renderDashboard() {
     grid.appendChild(statCard('Filament left', fmtGrams(stats.gramsLeft) + 'g',
         `across ${plural(stats.activeCount, 'active spool')}`));
     grid.appendChild(statCard('Total spent', stats.hasPrices ? fmtMoney(stats.spent) : 'No prices',
-        stats.costPerGram !== null ? `~$${stats.costPerGram.toFixed(3)} per gram` : 'Add prices to spools'));
-    grid.appendChild(statCard('Cost of prints', stats.usedCost > 0 ? fmtMoney(stats.usedCost) : '-',
-        stats.usedCost > 0 && stats.total > 0 ? `~${fmtMoney(stats.usedCost / stats.total)} per print` : 'Estimated from spool prices'));
+        stats.costPerGram !== null ? `~${fmtMoney(stats.costPerGram, 3)} per gram` : 'Add prices to spools'));
+    const totalCost = stats.usedCost + stats.energyCost;
+    grid.appendChild(statCard('Cost of prints', totalCost > 0 ? fmtMoney(totalCost) : '-',
+        stats.energyCost > 0 ? `incl. ${fmtMoney(stats.energyCost)} electricity`
+            : totalCost > 0 && stats.total > 0 ? `~${fmtMoney(totalCost / stats.total)} per print` : 'Estimated from spool prices'));
     grid.appendChild(statCard('Spools', `${stats.activeCount} active`,
         `${stats.lowCount} low, ${stats.spoolCount - stats.activeCount} archived`));
     root.appendChild(grid);
@@ -649,6 +839,7 @@ function renderDashboard() {
     }
 
     const cols = h('div', 'dash-grid');
+    cols.appendChild(buildPrinterPanel(stats));
 
     // --- Filament by material (donut) ---
     const materials = Object.entries(stats.byMaterial).filter(([, g]) => g > 0).sort((a, b) => b[1] - a[1]);
@@ -768,6 +959,233 @@ function renderDashboard() {
     }
 
     if (cols.children.length > 0) root.appendChild(cols);
+
+    root.appendChild(buildAchievementsPanel(stats));
+}
+
+// ---------- Dashboard pieces: backup reminder, printer, achievements ----------
+
+function buildBackupBanner() {
+    const days = state.settings.backupDays;
+    const hasData = Object.keys(state.prints).length + Object.keys(state.spools).length > 0;
+    if (!days || !hasData) return null;
+
+    const last = state.lastExported ? new Date(state.lastExported) : null;
+    const known = last && !Number.isNaN(last.getTime());
+    const age = known ? Math.floor((Date.now() - last.getTime()) / 86400000) : Infinity;
+    if (age < days) return null;
+
+    const banner = h('div', 'banner');
+    banner.id = 'backup-banner';
+    banner.appendChild(icon('alert'));
+    const text = h('p', 'banner-text');
+    text.appendChild(h('strong', null, known ? `Your last backup was ${plural(age, 'day')} ago. ` : 'You have not backed up yet. '));
+    text.append('Everything lives in this browser, so keep a copy.');
+    banner.appendChild(text);
+    const button = h('button', 'btn btn-primary btn-small', 'Export backup');
+    button.type = 'button';
+    button.addEventListener('click', exportData);
+    banner.appendChild(button);
+    return banner;
+}
+
+function maintenanceStatus(stats) {
+    const today = todayLocal();
+    const hoursNow = stats.minutes / 60;
+    const list = Object.entries(state.maintenance).map(([id, task]) => {
+        const used = task.unit === 'hours' ? Math.max(0, hoursNow - task.atHours)
+            : task.unit === 'prints' ? Math.max(0, stats.total - task.atPrints)
+            : Math.max(0, daysBetween(task.lastDate, today));
+        const remaining = task.every - used;
+        return { id, task, used, remaining, fraction: used / task.every, due: remaining <= 0 };
+    });
+    list.sort((a, b) => b.fraction - a.fraction);
+    return list;
+}
+
+/** "1 hour", "2.5 hours", "1 print", "3 prints", "1 day". */
+function unitCount(n, unit) {
+    const text = fmtNum(n);
+    return text === '1' ? `${text} ${unit.replace(/s$/, '')}` : `${text} ${unit}`;
+}
+
+function maintenanceText(m) {
+    const unit = UNIT_LABELS[m.task.unit];
+    if (!m.due) return `${unitCount(m.remaining, unit)} left`;
+    return m.remaining === 0 ? 'Due now' : `Overdue by ${unitCount(-m.remaining, unit)}`;
+}
+
+function markMaintenanceDone(id) {
+    const task = state.maintenance[id];
+    if (!task) return;
+    const before = { ...task };
+    const stats = calcStats();
+    task.lastDate = todayLocal();
+    task.atHours = stats.minutes / 60;
+    task.atPrints = stats.total;
+    saveState();
+    renderAll();
+    notify(`Marked "${task.name}" as done.`, {
+        action: {
+            label: 'Undo',
+            onClick: () => {
+                state.maintenance[id] = before;
+                saveState();
+                renderAll();
+            }
+        }
+    });
+}
+
+function buildMaintenanceRow(m, { withDelete = false } = {}) {
+    const row = h('div', m.due ? 'maint-row is-due' : 'maint-row');
+    row.dataset.id = m.id;
+
+    const top = h('div', 'maint-top');
+    const text = h('div', 'maint-text');
+    text.appendChild(h('span', 'list-title', m.task.name));
+    text.appendChild(h('span', 'list-sub',
+        `${fmtNum(m.used)} of ${fmtNum(m.task.every)} ${UNIT_LABELS[m.task.unit]} \u00B7 ${maintenanceText(m)}`));
+    top.appendChild(text);
+
+    const done = h('button', m.due ? 'btn btn-primary btn-small' : 'btn btn-outline btn-small', 'Done');
+    done.type = 'button';
+    done.title = 'Mark as done today and start counting again';
+    done.addEventListener('click', () => markMaintenanceDone(m.id));
+    top.appendChild(done);
+
+    if (withDelete) {
+        const del = h('button', 'btn btn-danger-ghost btn-small', 'Delete');
+        del.type = 'button';
+        del.addEventListener('click', () => {
+            const removed = state.maintenance[m.id];
+            delete state.maintenance[m.id];
+            saveState();
+            renderAll();
+            notify(`Removed "${removed.name}".`, {
+                action: {
+                    label: 'Undo',
+                    onClick: () => {
+                        state.maintenance[m.id] = removed;
+                        saveState();
+                        renderAll();
+                    }
+                }
+            });
+        });
+        top.appendChild(del);
+    }
+    row.appendChild(top);
+
+    const bar = h('div', 'bar bar-thin');
+    const level = m.fraction >= 1 ? 'fail' : m.fraction >= 0.8 ? 'warn' : 'ok';
+    const fill = h('div', level === 'ok' ? 'bar-fill' : `bar-fill ${level}`);
+    fill.style.width = Math.min(100, Math.round(m.fraction * 100)) + '%';
+    bar.appendChild(fill);
+    row.appendChild(bar);
+    return row;
+}
+
+function buildPrinterPanel(stats) {
+    const pr = state.settings.printer;
+    const tasks = maintenanceStatus(stats);
+    const modelName = pr.model && pr.model !== 'Other' ? `Bambu Lab ${pr.model}` : '';
+    const configured = Boolean(modelName || pr.nickname || pr.date || pr.model);
+
+    const panel = dashPanel('Printer');
+    panel.id = 'printer-panel';
+
+    if (!configured && tasks.length === 0) {
+        panel.appendChild(h('p', 'body-text', 'Tell the app about your printer to track its hours, upkeep and electricity.'));
+        const go = h('button', 'btn btn-outline btn-small', 'Set up printer');
+        go.type = 'button';
+        go.addEventListener('click', () => openSettings('printer'));
+        panel.appendChild(go);
+        panel.lastChild.classList.add('panel-action');
+        return panel;
+    }
+
+    const head = h('div', 'printer-head');
+    head.appendChild(h('span', 'printer-icon', ''));
+    head.firstChild.appendChild(icon('cube'));
+    const names = h('div', 'printer-names');
+    names.appendChild(h('strong', 'printer-name', pr.nickname || modelName || 'My printer'));
+    const facts = [];
+    if (pr.nickname && modelName) facts.push(modelName);
+    facts.push(`${pr.nozzle} mm nozzle`);
+    names.appendChild(h('span', 'list-sub', facts.join(' \u00B7 ')));
+    head.appendChild(names);
+    panel.appendChild(head);
+
+    const lines = h('ul', 'fact-list');
+    if (pr.date) {
+        const d = daysBetween(todayLocal(), pr.date);
+        lines.appendChild(h('li', null, d > 0 ? `Arrives in ${plural(d, 'day')} (${formatDate(pr.date)})`
+            : d === 0 ? 'Arrives today' : `In service for ${plural(-d, 'day')} (since ${formatDate(pr.date)})`));
+    }
+    lines.appendChild(h('li', null, `${fmtDuration(stats.minutes) || '0h'} printed across ${plural(stats.total, 'print')}`));
+    if (pr.price !== null) lines.appendChild(h('li', null, `Paid ${fmtMoney(pr.price)}`));
+    panel.appendChild(lines);
+
+    if (tasks.length > 0) {
+        panel.appendChild(h('h4', 'subhead', 'Upkeep'));
+        for (const m of tasks.slice(0, 3)) panel.appendChild(buildMaintenanceRow(m));
+    }
+
+    const manage = h('button', 'btn btn-ghost btn-small panel-action', tasks.length > 0 ? 'Manage printer and upkeep' : 'Printer settings');
+    manage.type = 'button';
+    manage.addEventListener('click', () => openSettings('printer'));
+    panel.appendChild(manage);
+    return panel;
+}
+
+function achievementList(stats) {
+    const prints = Object.values(state.prints).filter(isObject)
+        .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+    let streak = 0;
+    let best = 0;
+    for (const p of prints) {
+        streak = p.result ? streak + 1 : 0;
+        best = Math.max(best, streak);
+    }
+    const materials = Object.entries(stats.byMaterial).filter(([m, g]) => g > 0 && m !== 'unknown').length;
+    const queueDone = Object.values(state.queue).some((q) => isObject(q) && q.done);
+
+    return [
+        { title: 'First layer', desc: 'Log your first print', done: stats.total >= 1 },
+        { title: 'On a roll', desc: 'Log 10 prints', done: stats.total >= 10 },
+        { title: 'Print farm', desc: 'Log 50 prints', done: stats.total >= 50 },
+        { title: 'Century', desc: 'Log 100 prints', done: stats.total >= 100 },
+        { title: 'Kilo club', desc: 'Use 1 kg of filament', done: stats.grams >= 1000 },
+        { title: 'Spool eater', desc: 'Use 5 kg of filament', done: stats.grams >= 5000 },
+        { title: 'Round the clock', desc: 'Log 24 hours of print time', done: stats.minutes >= 24 * 60 },
+        { title: 'Marathon', desc: 'Log 100 hours of print time', done: stats.minutes >= 100 * 60 },
+        { title: 'Clean streak', desc: '5 successful prints in a row', done: best >= 5 },
+        { title: 'Collector', desc: 'Own 5 spools', done: stats.spoolCount >= 5 },
+        { title: 'Material explorer', desc: 'Print with 3 materials', done: materials >= 3 },
+        { title: 'Planner', desc: 'Finish an item from the queue', done: queueDone },
+        { title: 'Backed up', desc: 'Export a backup', done: Boolean(state.lastExported) }
+    ];
+}
+
+function buildAchievementsPanel(stats) {
+    const list = achievementList(stats);
+    const earned = list.filter((a) => a.done).length;
+    const panel = dashPanel(`Achievements (${earned} of ${list.length})`, 'achievements-panel');
+    panel.id = 'achievements';
+    const grid = h('div', 'achv-grid');
+    for (const a of list) {
+        const tile = h('div', a.done ? 'achv earned' : 'achv');
+        tile.appendChild(icon(a.done ? 'star' : 'lock'));
+        const text = h('div', 'achv-text');
+        text.appendChild(h('span', 'achv-title', a.title));
+        text.appendChild(h('span', 'achv-desc', a.desc));
+        tile.appendChild(text);
+        tile.title = a.done ? 'Earned' : 'Not earned yet';
+        grid.appendChild(tile);
+    }
+    panel.appendChild(grid);
+    return panel;
 }
 
 // ---------- Rendering: prints ----------
@@ -863,8 +1281,13 @@ function buildPrintCard(id, p) {
         d.append(dur);
         meta.appendChild(d);
     }
-    const cost = costOfPrint(p);
-    if (cost > 0) meta.appendChild(h('span', 'meta-item', `~${fmtMoney(cost)}`));
+    const energy = energyCostOfPrint(p);
+    const cost = costOfPrint(p) + energy;
+    if (cost > 0) {
+        const c = h('span', 'meta-item', `~${fmtMoney(cost)}`);
+        c.title = energy > 0 ? `Filament ${fmtMoney(cost - energy)} + electricity ${fmtMoney(energy)}` : 'Estimated filament cost';
+        meta.appendChild(c);
+    }
     const safeLink = normalizeLink(p.link);
     if (safeLink) meta.appendChild(makeLink(safeLink));
     card.appendChild(meta);
@@ -1231,7 +1654,7 @@ function buildSpoolCard(id, s) {
     const remaining = start - used;
     const fraction = start > 0 ? remaining / start : 0;
     const pct = Math.max(0, Math.round(fraction * 100));
-    const level = fraction > WARN_FRACTION ? 'ok' : fraction > LOW_FRACTION ? 'warn' : 'fail';
+    const level = fraction > warnFraction() ? 'ok' : fraction > lowFraction() ? 'warn' : 'fail';
 
     const top = h('div', 'spool-top');
     top.appendChild(makeSwatch(spoolHex(s), 'swatch swatch-large'));
@@ -1241,7 +1664,7 @@ function buildSpoolCard(id, s) {
     const badges = h('div', 'badge-row');
     badges.appendChild(makeBadge(String(s.material || 'other').toUpperCase()));
     if (s.archived) badges.appendChild(makeBadge('Archived', 'purple'));
-    if (!s.archived && fraction <= LOW_FRACTION) {
+    if (!s.archived && fraction <= lowFraction()) {
         badges.appendChild(makeBadge(remaining <= 0 ? 'Empty!' : 'Filament Low!', 'red'));
     }
     heading.appendChild(badges);
@@ -1272,7 +1695,7 @@ function buildSpoolCard(id, s) {
         [
             hasPrice ? fmtMoney(s.price) : 'No price',
             formatDate(s.date),
-            perGram ? `~$${perGram.toFixed(3)}/g` : '-'
+            perGram ? `~${fmtMoney(perGram, 3)}/g` : '-'
         ].join(' | ')));
 
     const uses = printsUsingSpool(id);
@@ -1343,11 +1766,12 @@ function openSpoolPopup({ copyFromId = null } = {}) {
     brandInput.value = source ? source.brand : '';
     materialDropdown.value = source && KNOWN_MATERIALS.includes(String(source.material).toLowerCase())
         ? String(source.material).toLowerCase()
-        : (source ? 'other' : 'pla');
+        : (source ? 'other' : state.settings.defaultMaterial);
     colorInput.value = source ? source.color : '';
     hexInput.value = source ? spoolHex(source) : DEFAULT_SWATCH;
     hexTouched = Boolean(source && isHex(source.hex));
-    gramsInput.value = source ? String(source.startGrams) : '';
+    gramsInput.value = source ? String(source.startGrams)
+        : (state.settings.defaultSpoolGrams > 0 ? String(state.settings.defaultSpoolGrams) : '');
     priceInput.value = source && Number.isFinite(source.price) ? String(source.price) : '';
     spoolDateInput.value = todayLocal();
     clearError(spoolError);
@@ -1548,6 +1972,7 @@ function exportData() {
         `print-tracker-${todayLocal()}.json`);
 
     renderData();
+    safeRender('the dashboard', renderDashboard);
     setDataMessage('Exported a backup file.');
 }
 
@@ -1570,7 +1995,7 @@ function buildPrintsCsv() {
         rows.push([
             p.date || '', p.name || '', p.result ? 'Success' : 'Failure',
             validMinutes(Number(p.minutes)) || '', fmtGrams(totalGramsOfPrint(p)),
-            costOfPrint(p).toFixed(2), spoolNames, p.link || '', p.notes || ''
+            (costOfPrint(p) + energyCostOfPrint(p)).toFixed(2), spoolNames, p.link || '', p.notes || ''
         ]);
     }
     return rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
@@ -1672,6 +2097,9 @@ function validateImport(data) {
         state: {
             schemaVersion: SCHEMA_VERSION,
             prints, spools, queue,
+            // null means "the backup did not include this", so the current value is kept
+            maintenance: data.maintenance === undefined ? null : cleanMaintenance(data.maintenance),
+            settings: data.settings === undefined ? null : cleanSettings(data.settings),
             hideArchived: Boolean(data.hideArchived),
             theme: data.theme === 'light' || data.theme === 'dark' ? data.theme : null,
             lastExported: typeof data.lastExported === 'string' ? data.lastExported : null
@@ -1706,9 +2134,12 @@ async function handleImport() {
 
     // Keep this browser's theme choice unless the backup carries one.
     if (incoming.theme === null) incoming.theme = state.theme;
+    if (incoming.settings === null) incoming.settings = state.settings;
+    if (incoming.maintenance === null) incoming.maintenance = state.maintenance;
     state = incoming;
     saveState();
     applyTheme();
+    syncAllSettings();
     renderAll();
     const extra = result.missingRefs > 0
         ? ` ${result.missingRefs} filament entr${result.missingRefs === 1 ? 'y refers' : 'ies refer'} to spools that are not in the backup.`
@@ -1722,13 +2153,450 @@ $('import-button').addEventListener('click', () => importFile.click());
 importFile.addEventListener('change', handleImport);
 $('clear-data-button').addEventListener('click', () => {
     if (!confirm('Delete ALL prints, spools and queue items from this browser? This cannot be undone. Export first if you are unsure.')) return;
-    const theme = state.theme;
+    const { theme, settings } = state;
     state = emptyState();
     state.theme = theme;
+    state.settings = settings;
     saveState();
     renderAll();
     setDataMessage('All data deleted.');
 });
+
+// ---------- Settings ----------
+
+const settingSyncers = [];
+let settingsTabName = 'printer';
+
+function addSync(fn) {
+    settingSyncers.push(fn);
+    fn();
+}
+
+function syncAllSettings() {
+    settingSyncers.forEach((fn) => fn());
+}
+
+/** Change settings: clean them, save, restyle the page and redraw. */
+function commitSettings(mutator) {
+    mutator(state.settings);
+    state.settings = cleanSettings(state.settings);
+    saveState();
+    applyTheme();
+    syncAllSettings();
+    renderAll();
+}
+
+function openSettings(tab = 'printer') {
+    showTab(Sections.SETTINGS);
+    showSettingsTab(tab);
+}
+
+function showSettingsTab(name) {
+    settingsTabName = name;
+    for (const key of ['printer', 'appearance', 'preferences']) {
+        const active = key === name;
+        $('settings-' + key).hidden = !active;
+        const tab = $('settings-tab-' + key);
+        tab.classList.toggle('active', active);
+        tab.setAttribute('aria-selected', String(active));
+        tab.tabIndex = active ? 0 : -1;
+    }
+}
+
+function settingRow(id, label, hint, control) {
+    const row = h('div', 'setting-row');
+    const text = h('div', 'setting-text');
+    const lab = h('label', 'setting-label', label);
+    if (id) lab.htmlFor = id;
+    text.appendChild(lab);
+    if (hint) text.appendChild(h('p', 'setting-hint', hint));
+    row.appendChild(text);
+    const wrap = h('div', 'setting-control');
+    wrap.appendChild(control);
+    row.appendChild(wrap);
+    return row;
+}
+
+function settingCard(title, sub) {
+    const card = h('div', 'panel');
+    card.appendChild(h('h3', 'panel-title', title));
+    if (sub) card.appendChild(h('p', 'secondary-text small card-sub', sub));
+    return card;
+}
+
+function selectField(id, options, get, set) {
+    const select = h('select', 'dropdown');
+    select.id = id;
+    for (const [value, label] of options) {
+        const option = h('option', null, label);
+        option.value = value;
+        select.appendChild(option);
+    }
+    select.addEventListener('change', () => set(select.value));
+    addSync(() => { select.value = String(get()); });
+    return select;
+}
+
+function numberField(id, { min, max, step = 'any', placeholder = '', unit = '' }, get, set) {
+    const input = h('input', 'number-input');
+    input.type = 'number';
+    input.id = id;
+    input.min = String(min);
+    input.max = String(max);
+    input.step = String(step);
+    input.placeholder = placeholder;
+    input.addEventListener('change', () => {
+        const raw = input.value.trim();
+        const value = raw === '' ? null : input.valueAsNumber;
+        set(Number.isFinite(value) ? value : null);
+    });
+    addSync(() => {
+        const v = get();
+        input.value = v === null || v === undefined ? '' : String(v);
+    });
+    if (!unit) return input;
+    const wrap = h('div', 'input-unit');
+    wrap.append(input, h('span', 'unit', unit));
+    return wrap;
+}
+
+function textField(id, { maxlength, placeholder = '' }, get, set) {
+    const input = h('input', 'text-input');
+    input.type = 'text';
+    input.id = id;
+    input.maxLength = maxlength;
+    input.placeholder = placeholder;
+    input.spellcheck = false;
+    input.addEventListener('change', () => set(input.value.trim()));
+    addSync(() => { input.value = get(); });
+    return input;
+}
+
+function dateField(id, get, set) {
+    const input = h('input', 'date-input');
+    input.type = 'date';
+    input.id = id;
+    input.addEventListener('change', () => set(input.value));
+    addSync(() => { input.value = get(); });
+    return input;
+}
+
+function toggleField(id, get, set) {
+    const label = h('label', 'switch');
+    const input = h('input', 'switch-input');
+    input.type = 'checkbox';
+    input.id = id;
+    input.addEventListener('change', () => set(input.checked));
+    label.appendChild(input);
+    label.appendChild(h('span', 'switch-track'));
+    addSync(() => { input.checked = Boolean(get()); });
+    return label;
+}
+
+function rangeField(id, { min, max, step = 1, format }, get, set) {
+    const wrap = h('div', 'range-wrap');
+    const input = h('input', 'range-input');
+    input.type = 'range';
+    input.id = id;
+    input.min = String(min);
+    input.max = String(max);
+    input.step = String(step);
+    const readout = h('span', 'range-value');
+    input.addEventListener('input', () => {
+        readout.textContent = format(Number(input.value));
+        set(Number(input.value));
+    });
+    addSync(() => {
+        input.value = String(get());
+        readout.textContent = format(Number(get()));
+    });
+    wrap.append(input, readout);
+    return wrap;
+}
+
+function buildPrinterSettings(root) {
+    const printer = settingCard('Your printer', 'Shown on the dashboard. Everything here is optional.');
+    const set = (fn) => commitSettings((st) => fn(st.printer));
+    printer.appendChild(settingRow('set-printer-model', 'Model', null,
+        selectField('set-printer-model', [['', 'Not set'], ...PRINTER_MODELS.map((m) => [m, m])],
+            () => state.settings.printer.model, (v) => set((p) => { p.model = v; }))));
+    printer.appendChild(settingRow('set-printer-name', 'Nickname', 'Something to call it, like "Benchy HQ".',
+        textField('set-printer-name', { maxlength: 40, placeholder: 'e.g., Workhorse' },
+            () => state.settings.printer.nickname, (v) => set((p) => { p.nickname = v; }))));
+    printer.appendChild(settingRow('set-printer-nozzle', 'Nozzle size', null,
+        selectField('set-printer-nozzle', NOZZLES.map((n) => [n, `${n} mm`]),
+            () => state.settings.printer.nozzle, (v) => set((p) => { p.nozzle = v; }))));
+    printer.appendChild(settingRow('set-printer-date', 'Arrival or purchase date', 'A future date becomes a countdown on the dashboard.',
+        dateField('set-printer-date', () => state.settings.printer.date, (v) => set((p) => { p.date = v; }))));
+    printer.appendChild(settingRow('set-printer-price', 'Price paid', null,
+        numberField('set-printer-price', { min: 0, max: 10000000, step: 0.01, placeholder: 'optional' },
+            () => state.settings.printer.price, (v) => set((p) => { p.price = v; }))));
+    root.appendChild(printer);
+
+    const power = settingCard('Electricity', 'Used to estimate the energy cost of prints that have a print time. Leave both at 0 to skip it.');
+    power.appendChild(settingRow('set-printer-watts', 'Average power while printing', 'Check your printer\'s spec sheet or a plug-in power meter.',
+        numberField('set-printer-watts', { min: 0, max: 5000, step: 1, placeholder: '0', unit: 'W' },
+            () => state.settings.printer.watts || '', (v) => set((p) => { p.watts = v === null ? 0 : v; }))));
+    power.appendChild(settingRow('set-printer-kwh', 'Electricity price', 'Per kilowatt-hour, in your currency.',
+        numberField('set-printer-kwh', { min: 0, max: 100, step: 0.001, placeholder: '0', unit: 'per kWh' },
+            () => state.settings.printer.kwhPrice || '', (v) => set((p) => { p.kwhPrice = v === null ? 0 : v; }))));
+    const preview = h('p', 'secondary-text small');
+    preview.id = 'energy-preview';
+    power.appendChild(preview);
+    addSync(() => {
+        const { watts, kwhPrice } = state.settings.printer;
+        preview.textContent = watts > 0 && kwhPrice > 0
+            ? `A 5 hour print would use about ${fmtMoney(5 * (watts / 1000) * kwhPrice)} of electricity.`
+            : 'Fill in both values to see an example.';
+    });
+    root.appendChild(power);
+
+    root.appendChild(buildMaintenanceCard());
+}
+
+const MAINTENANCE_PRESETS = [
+    { name: 'Clean the build plate', unit: 'prints', every: 10 },
+    { name: 'Clean nozzle and extruder', unit: 'hours', every: 100 },
+    { name: 'Lubricate rails and rods', unit: 'hours', every: 200 },
+    { name: 'Dry opened filament', unit: 'days', every: 30 }
+];
+
+let maintenanceListEl = null;
+
+function addMaintenance({ name, unit, every }) {
+    const cleanName = cleanText(name, 60);
+    const amount = Number(every);
+    if (cleanName === '') return 'Give the task a name.';
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 1000000) return 'Enter how often it is due, above 0.';
+    if (!Object.prototype.hasOwnProperty.call(UNIT_LABELS, unit)) return 'Pick hours, days or prints.';
+    const stats = calcStats();
+    state.maintenance[uid()] = {
+        name: cleanName, unit, every: amount,
+        lastDate: todayLocal(), atHours: stats.minutes / 60, atPrints: stats.total
+    };
+    saveState();
+    renderAll();
+    return '';
+}
+
+function buildMaintenanceCard() {
+    const card = settingCard('Upkeep reminders', 'Count print hours, days or prints since you last did something. The intervals are your call; check your printer\'s manual.');
+
+    maintenanceListEl = h('div', 'maint-list');
+    maintenanceListEl.id = 'maintenance-list';
+    card.appendChild(maintenanceListEl);
+
+    const form = h('div', 'maint-form');
+    const name = h('input', 'text-input');
+    name.type = 'text';
+    name.id = 'maint-name';
+    name.maxLength = 60;
+    name.placeholder = 'Task, e.g., Replace nozzle';
+    name.setAttribute('aria-label', 'Task name');
+    const every = h('input', 'number-input');
+    every.type = 'number';
+    every.id = 'maint-every';
+    every.min = '1';
+    every.step = 'any';
+    every.placeholder = 'Every';
+    every.setAttribute('aria-label', 'How often');
+    const unit = h('select', 'dropdown');
+    unit.id = 'maint-unit';
+    unit.setAttribute('aria-label', 'Unit');
+    for (const u of Object.keys(UNIT_LABELS)) {
+        const o = h('option', null, UNIT_LABELS[u]);
+        o.value = u;
+        unit.appendChild(o);
+    }
+    const add = h('button', 'btn btn-primary', 'Add task');
+    add.type = 'button';
+    add.id = 'maint-add-button';
+    const error = h('p', 'error-text');
+    error.id = 'maint-error';
+    error.hidden = true;
+    const submit = () => {
+        const problem = addMaintenance({ name: name.value, unit: unit.value, every: every.valueAsNumber });
+        if (problem) return showError(error, problem);
+        clearError(error);
+        name.value = '';
+        every.value = '';
+        name.focus();
+        return true;
+    };
+    add.addEventListener('click', submit);
+    name.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+    every.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+    form.append(name, every, unit, add);
+    card.appendChild(form);
+    card.appendChild(error);
+
+    card.appendChild(h('p', 'setting-hint', 'Quick add, starting points you can change later:'));
+    const presets = h('div', 'chips');
+    for (const preset of MAINTENANCE_PRESETS) {
+        const chip = h('button', 'chip chip-button', `+ ${preset.name} (every ${preset.every} ${UNIT_LABELS[preset.unit]})`);
+        chip.type = 'button';
+        chip.addEventListener('click', () => addMaintenance(preset));
+        presets.appendChild(chip);
+    }
+    card.appendChild(presets);
+    return card;
+}
+
+function renderMaintenanceSettings() {
+    if (!maintenanceListEl) return;
+    maintenanceListEl.replaceChildren();
+    const list = maintenanceStatus(calcStats());
+    if (list.length === 0) {
+        maintenanceListEl.appendChild(emptyState_('No upkeep tasks yet.', 'Add one below, or pick a quick add.'));
+        return;
+    }
+    for (const m of list) maintenanceListEl.appendChild(buildMaintenanceRow(m, { withDelete: true }));
+}
+
+function buildAppearanceSettings(root) {
+    const look = settingCard('Look and feel');
+
+    look.appendChild(settingRow('set-theme', 'Theme', 'Auto follows your device.',
+        selectField('set-theme', [['auto', 'Auto'], ['dark', 'Dark'], ['light', 'Light']],
+            () => state.theme || 'auto',
+            (v) => {
+                state.theme = v === 'auto' ? null : v;
+                saveState();
+                applyTheme();
+                syncAllSettings();
+            })));
+
+    const swatches = h('div', 'swatch-picker');
+    swatches.setAttribute('role', 'group');
+    swatches.setAttribute('aria-label', 'Accent color');
+    const swatchButtons = {};
+    for (const [key, accent] of Object.entries(ACCENTS)) {
+        const b = h('button', 'accent-swatch');
+        b.type = 'button';
+        b.id = 'accent-' + key;
+        b.title = accent.label;
+        b.setAttribute('aria-label', accent.label);
+        b.style.background = accent.dark.accent;
+        b.addEventListener('click', () => commitSettings((st) => { st.accent = key; }));
+        swatches.appendChild(b);
+        swatchButtons[key] = b;
+    }
+    addSync(() => {
+        for (const [key, b] of Object.entries(swatchButtons)) {
+            const on = key === state.settings.accent;
+            b.classList.toggle('selected', on);
+            b.setAttribute('aria-pressed', String(on));
+        }
+    });
+    look.appendChild(settingRow(null, 'Accent color', null, swatches));
+
+    look.appendChild(settingRow('set-density', 'Card spacing', 'Compact fits more on the screen.',
+        selectField('set-density', [['comfortable', 'Comfortable'], ['compact', 'Compact']],
+            () => state.settings.density, (v) => commitSettings((st) => { st.density = v; }))));
+    root.appendChild(look);
+
+    const bgCard = settingCard('Background', 'Inspired by what a slicer draws: layer lines, infill and build plate grids.');
+    const tiles = h('div', 'bg-tiles');
+    tiles.setAttribute('role', 'group');
+    tiles.setAttribute('aria-label', 'Background style');
+    const tileButtons = {};
+    for (const { key, label } of BACKGROUNDS) {
+        const b = h('button', 'bg-tile');
+        b.type = 'button';
+        b.id = 'bg-' + key;
+        b.appendChild(h('span', `bg-preview bgp-${key}`));
+        b.appendChild(h('span', 'bg-tile-label', label));
+        b.addEventListener('click', () => commitSettings((st) => { st.background = key; }));
+        tiles.appendChild(b);
+        tileButtons[key] = b;
+    }
+    addSync(() => {
+        for (const [key, b] of Object.entries(tileButtons)) {
+            const on = key === state.settings.background;
+            b.classList.toggle('selected', on);
+            b.setAttribute('aria-pressed', String(on));
+        }
+    });
+    bgCard.appendChild(tiles);
+    bgCard.appendChild(settingRow('set-bg-strength', 'Intensity', null,
+        rangeField('set-bg-strength', { min: 0, max: 100, step: 5, format: (n) => `${n}%` },
+            () => state.settings.bgStrength, (v) => commitSettings((st) => { st.bgStrength = v; }))));
+    bgCard.appendChild(settingRow('set-animate', 'Animate the background', 'Slow drifting motion. Turned off automatically if your device asks for reduced motion.',
+        toggleField('set-animate', () => state.settings.animate, (v) => commitSettings((st) => { st.animate = v; }))));
+    root.appendChild(bgCard);
+}
+
+function buildPreferenceSettings(root) {
+    const units = settingCard('Units and formats');
+    units.appendChild(settingRow('set-currency', 'Currency', null,
+        selectField('set-currency', CURRENCIES.map((c) => [c, c]),
+            () => state.settings.currency, (v) => commitSettings((st) => { st.currency = v; }))));
+    units.appendChild(settingRow('set-date-format', 'Date format', null,
+        selectField('set-date-format', [['mdy', 'MM/DD/YYYY'], ['dmy', 'DD/MM/YYYY'], ['iso', 'YYYY-MM-DD']],
+            () => state.settings.dateFormat, (v) => commitSettings((st) => { st.dateFormat = v; }))));
+    root.appendChild(units);
+
+    const filament = settingCard('Filament');
+    filament.appendChild(settingRow('set-low', 'Low filament warning', 'A spool counts as low at or below this share of its weight.',
+        numberField('set-low', { min: 5, max: 50, step: 1, placeholder: '25', unit: '%' },
+            () => state.settings.lowPercent, (v) => commitSettings((st) => { st.lowPercent = v === null ? 25 : v; }))));
+    filament.appendChild(settingRow('set-default-material', 'Default material', 'Pre-selected when you add a spool.',
+        selectField('set-default-material', [...KNOWN_MATERIALS, 'other'].map((m) => [m, m.toUpperCase()]),
+            () => state.settings.defaultMaterial, (v) => commitSettings((st) => { st.defaultMaterial = v; }))));
+    filament.appendChild(settingRow('set-default-grams', 'Default spool weight', 'Pre-filled when you add a spool. Use 0 to leave it empty.',
+        numberField('set-default-grams', { min: 0, max: 100000, step: 1, placeholder: '1000', unit: 'g' },
+            () => state.settings.defaultSpoolGrams, (v) => commitSettings((st) => { st.defaultSpoolGrams = v === null ? 0 : v; }))));
+    root.appendChild(filament);
+
+    const safety = settingCard('Backups and shortcuts');
+    safety.appendChild(settingRow('set-backup-days', 'Backup reminder', 'Show a reminder on the dashboard when your last export is older than this. Use 0 to turn it off.',
+        numberField('set-backup-days', { min: 0, max: 365, step: 1, placeholder: '30', unit: 'days' },
+            () => state.settings.backupDays, (v) => commitSettings((st) => { st.backupDays = v === null ? 0 : v; }))));
+    safety.appendChild(settingRow('set-shortcuts', 'Keyboard shortcuts', null,
+        toggleField('set-shortcuts', () => state.settings.shortcuts, (v) => commitSettings((st) => { st.shortcuts = v; }))));
+    const keys = h('dl', 'shortcut-list');
+    for (const [key, what] of SHORTCUTS) {
+        keys.appendChild(h('dt', null, key));
+        keys.lastChild.className = 'kbd';
+        keys.appendChild(h('dd', null, what));
+    }
+    safety.appendChild(keys);
+    root.appendChild(safety);
+
+    const reset = h('div', 'data-actions');
+    const resetButton = h('button', 'btn btn-outline', 'Reset settings to defaults');
+    resetButton.type = 'button';
+    resetButton.id = 'reset-settings-button';
+    resetButton.addEventListener('click', () => {
+        if (!confirm('Reset all settings, including your printer details, to their defaults? Your prints, spools and queue are not touched.')) return;
+        state.settings = defaultSettings();
+        state.theme = null;
+        saveState();
+        applyTheme();
+        syncAllSettings();
+        renderAll();
+        notify('Settings reset.');
+    });
+    reset.appendChild(resetButton);
+    root.appendChild(reset);
+}
+
+function buildSettings() {
+    const names = [['printer', 'Printer'], ['appearance', 'Appearance'], ['preferences', 'Preferences']];
+    const bar = $('settings-tabs');
+    for (const [key, label] of names) {
+        const b = h('button', 'subtab', label);
+        b.type = 'button';
+        b.id = 'settings-tab-' + key;
+        b.setAttribute('role', 'tab');
+        b.addEventListener('click', () => showSettingsTab(key));
+        bar.appendChild(b);
+    }
+    buildPrinterSettings($('settings-printer'));
+    buildAppearanceSettings($('settings-appearance'));
+    buildPreferenceSettings($('settings-preferences'));
+    showSettingsTab(settingsTabName);
+}
 
 // ---------- Popups: Escape, backdrop click and Tab focus loop ----------
 
@@ -1756,8 +2624,48 @@ document.addEventListener('keydown', (e) => {
     } else if (e.key === 'Tab') {
         if (printPopup.style.display === 'block') trapFocus(printPopup, e);
         else if (spoolPopup.style.display === 'block') trapFocus(spoolPopup, e);
+    } else {
+        handleShortcut(e);
     }
 });
+
+const SHORTCUTS = [
+    ['1 - 6', 'Switch tabs'],
+    ['N', 'New print'],
+    ['S', 'Add a spool'],
+    ['/', 'Search prints'],
+    ['T', 'Toggle theme'],
+    ['?', 'Open these shortcuts']
+];
+
+function handleShortcut(e) {
+    if (!state.settings.shortcuts || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (printPopup.style.display === 'block' || spoolPopup.style.display === 'block') return;
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
+
+    const key = e.key.toLowerCase();
+    const tabIndex = '123456'.indexOf(key);
+    if (key.length === 1 && tabIndex !== -1) {
+        showTab(TABS[tabIndex].section);
+    } else if (key === 'n') {
+        e.preventDefault();
+        showTab(Sections.PRINTS);
+        openPrintPopup();
+    } else if (key === 's') {
+        e.preventDefault();
+        showTab(Sections.FILA);
+        openSpoolPopup();
+    } else if (key === '/') {
+        e.preventDefault();
+        showTab(Sections.PRINTS);
+        printSearch.focus();
+    } else if (key === 't') {
+        toggleTheme();
+    } else if (key === '?') {
+        openSettings('preferences');
+    }
+}
 
 // ---------- Start ----------
 
@@ -1769,6 +2677,10 @@ document.body.appendChild(spoolPopup);
 buildHeader();
 setupPrintsToolbar();
 setupSpoolToolbar();
+buildSettings();
 applyTheme();
 renderAll();
-showTab(Sections.DASH);
+{
+    const fromAddress = (typeof location !== 'undefined' ? location.hash : '').replace('#', '');
+    showTab(Object.values(Sections).includes(fromAddress) ? fromAddress : Sections.DASH, { updateAddress: false });
+}
