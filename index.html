@@ -94,6 +94,7 @@
                     <span>Hide archived</span>
                 </label>
             </div>
+            <div id="ams" class="ams-section"></div>
             <div id="spools" class="card-list spool-grid"></div>
         </section>
 
@@ -131,11 +132,13 @@
                 <div class="data-actions">
                     <button type="button" id="export-button" class="btn btn-primary">Export JSON</button>
                     <button type="button" id="import-button" class="btn btn-outline">Import JSON</button>
-                    <button type="button" id="export-csv-button" class="btn btn-outline">Prints as CSV</button>
+                    <button type="button" id="export-csv-button" class="btn btn-outline">Export prints (CSV)</button>
+                    <button type="button" id="import-csv-button" class="btn btn-outline">Import prints (CSV)</button>
                     <input type="file" id="import-file" accept="application/json,.json" hidden>
+                    <input type="file" id="import-csv-file" accept="text/csv,.csv,text/plain" hidden>
                 </div>
                 <p id="data-message" class="body-text" role="status" hidden></p>
-                <p class="body-text secondary-text small">Everything is saved only in this browser. Clearing site data or switching browsers erases it, so export a backup now and then. Importing replaces all current data. The CSV is for spreadsheets only and can't be imported back.</p>
+                <p class="body-text secondary-text small">Everything is saved only in this browser. Clearing site data or switching browsers erases it, so export a backup now and then. Importing JSON replaces all current data. Importing a CSV only adds prints; it skips ones you already have and never changes the rest.</p>
             </div>
             <div class="panel panel-danger">
                 <h3 class="panel-title">Danger zone</h3>
@@ -186,6 +189,11 @@
                 </div>
             </div>
 
+            <div class="field" id="fail-reason-field" hidden>
+                <label for="fail-reason-select">What went wrong? (optional)</label>
+                <select id="fail-reason-select" class="dropdown"></select>
+            </div>
+
             <div class="field">
                 <span class="label-text" id="duration-label">Print time (optional)</span>
                 <div class="inline-fields" role="group" aria-labelledby="duration-label">
@@ -203,6 +211,7 @@
 
             <div class="field">
                 <span class="label-text">Filament used (grams)</span>
+                <div id="ams-quick" class="ams-quick" hidden></div>
                 <div id="filament-rows" class="filament-rows-box">
                     <template id="filament-row-template">
                         <div class="filament-row">
@@ -214,6 +223,16 @@
                     </template>
                     <div id="filament-row-list"></div>
                     <button type="button" id="add-filament-row-button" class="btn btn-ghost btn-small">+ Add another filament</button>
+                </div>
+            </div>
+
+            <div class="field">
+                <span class="label-text" id="profile-label">Slicer profile (optional)</span>
+                <div class="profile-grid" role="group" aria-labelledby="profile-label">
+                    <input type="text" spellcheck="false" id="profile-name-tinput" class="text-input" maxlength="60" placeholder="Profile, e.g., 0.20mm Standard" aria-label="Profile name">
+                    <input type="text" spellcheck="false" id="profile-layer-tinput" class="text-input" maxlength="20" placeholder="Layer height, e.g., 0.2 mm" aria-label="Layer height">
+                    <input type="text" spellcheck="false" id="profile-infill-tinput" class="text-input" maxlength="20" placeholder="Infill, e.g., 15%" aria-label="Infill">
+                    <input type="text" spellcheck="false" id="profile-supports-tinput" class="text-input" maxlength="40" placeholder="Supports, e.g., tree, auto" aria-label="Supports">
                 </div>
             </div>
 
@@ -276,6 +295,11 @@
             <div class="field">
                 <label for="date-dinput">Date bought</label>
                 <input type="date" id="date-dinput" class="date-input" required>
+            </div>
+
+            <div class="field" id="dried-field">
+                <label for="dried-dinput">Last dried (optional)</label>
+                <input type="date" id="dried-dinput" class="date-input">
             </div>
 
             <p id="spool-error" class="error-text" role="alert" hidden></p>

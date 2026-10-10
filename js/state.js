@@ -1,0 +1,239 @@
+import { AMS_TYPES, BRANDS, brandOfLegacyModel, findPrinter } from './catalog.js';
+import { ACCENTS, BACKGROUNDS, CORRUPT_KEY, CURRENCIES, DATE_FORMATS, FAIL_REASONS, RANGES, KNOWN_MATERIALS, NOZZLES, SCHEMA_VERSION, SETTINGS_VERSION, STORAGE_KEY, UNIT_LABELS } from './constants.js';
+import { clampNum, cleanText, isObject, isSafeId, isValidDate, notify, todayLocal } from './util.js';
+
+// ---------- State and storage ----------
+
+export function defaultSettings() {
+    return {
+        accent: 'amber',
+        background: 'blueprint',
+        bgStrength: 60,
+        animate: true,
+        density: 'comfortable',
+        currency: '$',
+        dateFormat: 'mdy',
+        lowPercent: 25,
+        defaultMaterial: 'pla',
+        defaultSpoolGrams: 1000,
+        backupDays: 30,
+        dryDays: 30,
+        shortcuts: true,
+        settingsVersion: SETTINGS_VERSION,
+        customPresets: {},
+        // watts, kwhPrice and price: null means "use the automatic value", a number is the person's own
+        printer: { brand: '', model: '', nickname: '', nozzle: '0.4', date: '', price: null, watts: null, kwhPrice: null, wear: null }
+    };
+}
+
+/** Turn anything (including junk from an import) into a complete, valid settings object. */
+export function cleanSettings(raw) {
+    const d = defaultSettings();
+    const s = isObject(raw) ? raw : {};
+    const p = isObject(s.printer) ? s.printer : {};
+    const legacy = !(Number(s.settingsVersion) >= SETTINGS_VERSION);
+
+    let brand = BRANDS.some((b) => b.key === p.brand) ? p.brand : brandOfLegacyModel(p.model);
+    const model = findPrinter(brand, p.model) ? p.model : '';
+    if (!brand) brand = '';
+
+    // Before version 2, 0 meant "not set". Now null means that and 0 is a real value.
+    const own = (v, max, digits) => {
+        if (v === null || v === undefined || v === '') return null;
+        const n = Number(v);
+        if (!Number.isFinite(n) || n < 0 || (legacy && n === 0)) return null;
+        const f = Math.pow(10, digits);
+        return Math.round(Math.min(n, max) * f) / f;
+    };
+
+    let background = BACKGROUNDS.some((b) => b.key === s.background) ? s.background : d.background;
+    if (legacy && background === 'layers') background = 'blueprint';
+
+    return {
+        accent: Object.prototype.hasOwnProperty.call(ACCENTS, s.accent) ? s.accent : d.accent,
+        background,
+        bgStrength: Math.round(clampNum(s.bgStrength, 0, 100, d.bgStrength)),
+        animate: typeof s.animate === 'boolean' ? s.animate : d.animate,
+        density: s.density === 'compact' ? 'compact' : 'comfortable',
+        currency: CURRENCIES.includes(s.currency) ? s.currency : d.currency,
+        dateFormat: DATE_FORMATS.includes(s.dateFormat) ? s.dateFormat : d.dateFormat,
+        lowPercent: Math.round(clampNum(s.lowPercent, 5, 50, d.lowPercent)),
+        defaultMaterial: [...KNOWN_MATERIALS, 'other'].includes(s.defaultMaterial) ? s.defaultMaterial : d.defaultMaterial,
+        defaultSpoolGrams: Math.round(clampNum(s.defaultSpoolGrams, 0, 100000, d.defaultSpoolGrams)),
+        backupDays: Math.round(clampNum(s.backupDays, 0, 365, d.backupDays)),
+        dryDays: Math.round(clampNum(s.dryDays, 0, 365, d.dryDays)),
+        shortcuts: typeof s.shortcuts === 'boolean' ? s.shortcuts : d.shortcuts,
+        settingsVersion: SETTINGS_VERSION,
+        customPresets: cleanPresets(s.customPresets),
+        printer: {
+            brand,
+            model,
+            nickname: cleanText(p.nickname, 40),
+            nozzle: NOZZLES.includes(String(p.nozzle)) ? String(p.nozzle) : d.printer.nozzle,
+            date: isValidDate(p.date) ? p.date : '',
+            price: own(p.price, 10000000, 2),
+            watts: own(p.watts, 5000, 0),
+            kwhPrice: own(p.kwhPrice, 100, 4),
+            wear: own(p.wear, 10000, 4)
+        }
+    };
+}
+
+/** Saved upkeep presets: { id: { name, tasks: [{ name, unit, every }] } }. */
+export function cleanPresets(raw) {
+    const out = {};
+    if (!isObject(raw)) return out;
+    for (const [id, preset] of Object.entries(raw).slice(0, 20)) {
+        if (!isSafeId(id) || !isObject(preset) || !Array.isArray(preset.tasks)) continue;
+        const name = cleanText(preset.name, 40);
+        if (name === '') continue;
+        const tasks = [];
+        for (const t of preset.tasks.slice(0, 40)) {
+            if (!isObject(t)) continue;
+            const taskName = cleanText(t.name, 60);
+            const every = Number(t.every);
+            if (taskName === '' || !Object.prototype.hasOwnProperty.call(UNIT_LABELS, t.unit)) continue;
+            if (!Number.isFinite(every) || every <= 0 || every > 1000000) continue;
+            tasks.push({ name: taskName, unit: t.unit, every });
+        }
+        if (tasks.length > 0) out[id] = { name, tasks };
+    }
+    return out;
+}
+
+/** Clean the maintenance list. Entries that cannot be repaired are dropped. */
+export function cleanMaintenance(raw) {
+    const out = {};
+    if (!isObject(raw)) return out;
+    for (const [id, t] of Object.entries(raw)) {
+        if (!isSafeId(id) || !isObject(t)) continue;
+        const name = cleanText(t.name, 60);
+        const every = Number(t.every);
+        if (name === '' || !Object.prototype.hasOwnProperty.call(UNIT_LABELS, t.unit)) continue;
+        if (!Number.isFinite(every) || every <= 0 || every > 1000000) continue;
+        out[id] = {
+            name,
+            unit: t.unit,
+            every,
+            lastDate: isValidDate(t.lastDate) ? t.lastDate : todayLocal(),
+            atHours: clampNum(t.atHours, 0, 10000000, 0),
+            atPrints: Math.round(clampNum(t.atPrints, 0, 10000000, 0)),
+            atGrams: clampNum(t.atGrams, 0, 1e10, 0)
+        };
+    }
+    return out;
+}
+
+/** AMS units: { id: { name, type, slots: [spoolId or ''] } }. Slots pointing at missing spools are emptied. */
+export function cleanAms(raw, spools) {
+    const out = {};
+    if (!isObject(raw)) return out;
+    const used = new Set();
+    for (const [id, u] of Object.entries(raw).slice(0, 12)) {
+        if (!isSafeId(id) || !isObject(u)) continue;
+        const info = AMS_TYPES.find((t) => t.key === u.type);
+        const name = cleanText(u.name, 30);
+        if (!info || name === '') continue;
+        const given = Array.isArray(u.slots) ? u.slots : [];
+        const slots = [];
+        for (let i = 0; i < info.slots; i++) {
+            const sid = given[i];
+            const ok = typeof sid === 'string' && isSafeId(sid) && isObject(spools) && isObject(spools[sid]) && !used.has(sid);
+            if (ok) used.add(sid);
+            slots.push(ok ? sid : '');
+        }
+        const price = typeof u.price === 'number' && u.price >= 0 && u.price <= 10000000 ? Math.round(u.price * 100) / 100 : null;
+        out[id] = { name, type: info.key, slots, price };
+    }
+    return out;
+}
+
+export function cleanUi(raw) {
+    const u = isObject(raw) ? raw : {};
+    const when = typeof u.backupDismissedAt === 'string' ? new Date(u.backupDismissedAt) : null;
+    return {
+        backupDismissedAt: when && !Number.isNaN(when.getTime()) ? when.toISOString() : null,
+        range: RANGES.some(([k]) => k === u.range) ? u.range : 'all'
+    };
+}
+
+/** Print-profile notes: { name, layer, infill, supports } of short text, or null when all are empty. */
+export function cleanProfile(raw) {
+    if (!isObject(raw)) return null;
+    const out = {
+        name: cleanText(raw.name, 60),
+        layer: cleanText(raw.layer, 20),
+        infill: cleanText(raw.infill, 20),
+        supports: cleanText(raw.supports, 40)
+    };
+    return Object.values(out).some((v) => v !== '') ? out : null;
+}
+
+export function cleanFailReason(raw, result) {
+    return !result && FAIL_REASONS.some(([k]) => k === raw) ? raw : '';
+}
+
+export function emptyState() {
+    return {
+        schemaVersion: SCHEMA_VERSION,
+        prints: {},
+        spools: {},
+        queue: {},
+        maintenance: {},
+        settings: defaultSettings(),
+        hideArchived: false,
+        theme: null,
+        lastExported: null,
+        ui: { backupDismissedAt: null, range: 'all' },
+        ams: {}
+    };
+}
+
+export function normalizeState(data) {
+    const s = isObject(data) ? data : {};
+    return {
+        schemaVersion: SCHEMA_VERSION,
+        prints: isObject(s.prints) ? s.prints : {},
+        spools: isObject(s.spools) ? s.spools : {},
+        queue: isObject(s.queue) ? s.queue : {},
+        maintenance: cleanMaintenance(s.maintenance),
+        settings: cleanSettings(s.settings),
+        hideArchived: Boolean(s.hideArchived),
+        theme: s.theme === 'light' || s.theme === 'dark' ? s.theme : null,
+        lastExported: typeof s.lastExported === 'string' ? s.lastExported : null,
+        ui: cleanUi(s.ui),
+        ams: cleanAms(s.ams, isObject(s.spools) ? s.spools : {})
+    };
+}
+
+export function loadState() {
+    let raw = null;
+    try {
+        raw = localStorage.getItem(STORAGE_KEY);
+    } catch (error) {
+        console.error('Could not read browser storage.', error);
+    }
+    if (!raw) return emptyState();
+
+    try {
+        return normalizeState(JSON.parse(raw));
+    } catch (error) {
+        console.error('Saved data is corrupted. Keeping a copy and starting fresh.', error);
+        try { localStorage.setItem(CORRUPT_KEY, raw); } catch (e) { /* nothing more to do */ }
+        return emptyState();
+    }
+}
+
+export let state = loadState();
+export function setState(next) { state = next; }
+
+export function saveState() {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        return true;
+    } catch (error) {
+        console.error(error);
+        notify('Could not save: browser storage is full or blocked. Export your data to keep it.', true);
+        return false;
+    }
+}
