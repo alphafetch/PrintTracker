@@ -56,6 +56,7 @@
                     <span class="search-icon" id="prints-search-icon" aria-hidden="true"></span>
                     <input type="search" id="print-search" class="text-input" placeholder="Search prints, spools, notes..." aria-label="Search prints" maxlength="80" autocomplete="off">
                 </div>
+                <select id="print-tag-filter" class="dropdown" aria-label="Filter by tag" hidden></select>
                 <select id="print-filter" class="dropdown" aria-label="Filter by result">
                     <option value="all">All results</option>
                     <option value="success">Successful</option>
@@ -69,6 +70,7 @@
                     <option value="time">Longest print</option>
                 </select>
             </div>
+            <details id="tag-totals" class="panel tag-panel" hidden></details>
             <div id="print-list" class="card-list"></div>
         </section>
 
@@ -255,6 +257,12 @@
                     <input type="text" spellcheck="false" id="profile-infill-tinput" class="text-input" maxlength="20" placeholder="Infill, e.g., 15%" aria-label="Infill">
                     <input type="text" spellcheck="false" id="profile-supports-tinput" class="text-input" maxlength="40" placeholder="Supports, e.g., tree, auto" aria-label="Supports">
                 </div>
+            </div>
+
+            <div class="field">
+                <label for="tags-tinput">Tags (optional)</label>
+                <input type="text" spellcheck="false" id="tags-tinput" class="text-input" maxlength="200" placeholder="Separate with commas, e.g., desk organizer, gift" autocomplete="off">
+                <div id="tag-suggestions" class="chips tag-suggestions" role="group" aria-label="Tags you already use" hidden></div>
             </div>
 
             <div class="field">

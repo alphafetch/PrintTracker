@@ -1,11 +1,11 @@
-import { costOfPrint, energyCostOfPrint, hasManyPrinters, printerIdOf, printerName, totalGramsOfPrint, usageOf, wearCostOfPrint } from './calc.js';
+import { costOfPrint, energyCostOfPrint, hasManyPrinters, printerIdOf, printerName, tagsOf, totalGramsOfPrint, usageOf, wearCostOfPrint } from './calc.js';
 import { failReasonLabel, MAX_IMPORT_BYTES, SCHEMA_VERSION } from './constants.js';
 import { planCsvImport } from './csv.js';
 import { renderDashboard } from './dashboard.js';
 import { renderAll, safeRender } from './render.js';
 import { syncAllSettings } from './settingsKit.js';
 import { takeSnapshot } from './snapshots.js';
-import { cleanAms, cleanParts, cleanFailReason, cleanMaintenance, cleanPrinterId, cleanProfile, cleanQueueSpec, cleanSettings, cleanUi, emptyState, normalizeState, saveState, setState, state } from './state.js';
+import { cleanAms, cleanParts, cleanFailReason, cleanMaintenance, cleanPrinterId, cleanProfile, cleanQueueSpec, cleanTags, cleanSettings, cleanUi, emptyState, normalizeState, saveState, setState, state } from './state.js';
 import { applyTheme } from './theme.js';
 import { $, notify, uid, cleanText, isSafeId, fmtGrams, isHex, isObject, isValidDate, normalizeLink, todayLocal, validMinutes } from './util.js';
 
@@ -61,10 +61,11 @@ export function csvCell(value) {
 }
 
 export function buildPrintsCsv() {
-    const rows = [['Date', 'Name', 'Result', 'Print time (min)', 'Filament (g)', 'Est. cost', 'Spools', 'Link', 'Notes',
-        'Failure reason', 'Profile', 'Layer height', 'Infill', 'Supports', ...(hasManyPrinters() ? ['Printer'] : [])]];
     const entries = Object.values(state.prints).filter(isObject)
         .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+    const anyTags = entries.some((p) => tagsOf(p).length > 0);
+    const rows = [['Date', 'Name', 'Result', 'Print time (min)', 'Filament (g)', 'Est. cost', 'Spools', 'Link', 'Notes',
+        'Failure reason', 'Profile', 'Layer height', 'Infill', 'Supports', ...(hasManyPrinters() ? ['Printer'] : []), ...(anyTags ? ['Tags'] : [])]];
     for (const p of entries) {
         const prof = isObject(p.profile) ? p.profile : {};
         const spoolNames = usageOf(p).map((u) => {
@@ -76,7 +77,8 @@ export function buildPrintsCsv() {
             validMinutes(Number(p.minutes)) || '', fmtGrams(totalGramsOfPrint(p)),
             (costOfPrint(p) + energyCostOfPrint(p) + wearCostOfPrint(p)).toFixed(2), spoolNames, p.link || '', p.notes || '',
             failReasonLabel(p.failReason), prof.name || '', prof.layer || '', prof.infill || '', prof.supports || '',
-            ...(hasManyPrinters() ? [printerName(printerIdOf(p))] : [])
+            ...(hasManyPrinters() ? [printerName(printerIdOf(p))] : []),
+            ...(anyTags ? [tagsOf(p).join('; ')] : [])
         ]);
     }
     return rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
@@ -160,6 +162,7 @@ export function validateImport(data) {
             notes: cleanText(p.notes, 500),
             failReason: cleanFailReason(p.failReason, Boolean(p.result)),
             profile: cleanProfile(p.profile),
+            tags: cleanTags(p.tags),
             printerId: cleanPrinterId(p.printerId, printers)
         };
     }

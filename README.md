@@ -21,6 +21,7 @@ A personal 3D print and filament tracker for Bambu Lab, FlashForge and ELEGOO pr
 - **Spool labels:** print a sheet of labels (colour swatch, brand, material, weight, date, price) in two sizes. No QR code, because the app is local-only.
 - **Material guide:** typical nozzle and bed temperatures and drying settings for PLA, PETG, ABS, ASA and TPU, from Bambu Lab's wiki.
 - **Add to queue:** every print card has an "Add to queue" button. The queued item remembers the filament, print time, profile and notes, and "Log print" fills them in again.
+- **Tags:** give a print one or more tags (up to 8, 24 characters each) such as "desk organizer" or "gift". The popup offers your existing tags as one-click chips, cards show them, clicking one filters the list, and a Prints-tab table totals prints, time, filament and cost per tag. Tags are in the CSV export/import and in "Print again" and the queue.
 - **Run-out forecast:** each spool shows when it should run out at your pace over the last 60 days (at least a week of data is assumed, so a brand-new spool does not give wild numbers). The reorder note on the dashboard uses it too.
 - **Shopping list:** on the Filament tab: low spools, spools that run out within 3 weeks, and colours used in 2+ prints in the last 90 days with none left. Buy again, or copy the list as text.
 - **Similar colours:** the spool popup warns when you already own a close colour in the same material, and the Filament tab lists near-duplicates in stock (CIE76 colour distance).

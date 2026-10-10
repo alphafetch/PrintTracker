@@ -626,3 +626,35 @@ export function summarize(start, end) {
     out.printers = hasManyPrinters() ? printerIds().map((id) => perPrinter[id] || { id, prints: 0, minutes: 0 }) : [];
     return out;
 }
+
+
+// ---------- Tags ----------
+
+/** A print's tags (older prints have none). */
+export function tagsOf(print) {
+    return print && Array.isArray(print.tags) ? print.tags.filter((t) => typeof t === 'string' && t !== '') : [];
+}
+
+export const tagKey = (tag) => String(tag).toLowerCase();
+
+/** Every tag in use with what its prints add up to, busiest first. Tags that differ only in case are one tag. */
+export function tagTotals() {
+    const map = new Map();
+    for (const p of Object.values(state.prints)) {
+        if (!isObject(p)) continue;
+        const grams = totalGramsOfPrint(p);
+        const cost = costOfPrint(p) + energyCostOfPrint(p) + wearCostOfPrint(p);
+        const mins = validMinutes(Number(p.minutes)) || 0;
+        for (const tag of new Set(tagsOf(p).map(tagKey))) {
+            const shown = tagsOf(p).find((t) => tagKey(t) === tag);
+            const row = map.get(tag) || { key: tag, tag: shown, prints: 0, failed: 0, minutes: 0, grams: 0, cost: 0 };
+            row.prints++;
+            if (!p.result) row.failed++;
+            row.minutes += mins;
+            row.grams += grams;
+            row.cost += cost;
+            map.set(tag, row);
+        }
+    }
+    return Array.from(map.values()).sort((a, b) => b.prints - a.prints || a.tag.localeCompare(b.tag));
+}

@@ -1,4 +1,4 @@
-import { costOfPrint, energyCostOfPrint, hasManyPrinters, printerIdOf, printerName, totalGramsOfPrint, usageOf, wearCostOfPrint } from './calc.js';
+import { costOfPrint, energyCostOfPrint, hasManyPrinters, printerIdOf, printerName, tagKey, tagTotals, tagsOf, totalGramsOfPrint, usageOf, wearCostOfPrint } from './calc.js';
 import { DEFAULT_SWATCH, failReasonLabel } from './constants.js';
 import { openPrintPopup } from './printPopup.js';
 import { emptyState_, makeBadge, plural, renderAll } from './render.js';
@@ -11,6 +11,7 @@ export const printList = $('print-list');
 export const printSearch = $('print-search');
 export const printFilter = $('print-filter');
 export const printSort = $('print-sort');
+export const printTagFilter = $('print-tag-filter');
 
 export function setupPrintsToolbar() {
     $('prints-search-icon').replaceChildren(icon('search'));
@@ -25,6 +26,7 @@ export function setupPrintsToolbar() {
     printSearch.addEventListener('input', renderPrints);
     printFilter.addEventListener('change', renderPrints);
     printSort.addEventListener('change', renderPrints);
+    printTagFilter.addEventListener('change', renderPrints);
 }
 
 export function printSearchText(p) {
@@ -32,6 +34,7 @@ export function printSearchText(p) {
     const parts = [p.name, p.notes, p.link, p.date, formatDate(p.date), p.result ? 'success' : 'failure failed',
         failReasonLabel(p.failReason), prof.name, prof.layer, prof.infill, prof.supports];
     if (hasManyPrinters()) parts.push(printerName(printerIdOf(p)));
+    parts.push(...tagsOf(p));
     for (const u of usageOf(p)) {
         const s = state.spools[u.spoolId];
         if (s) parts.push(s.brand, s.color, s.material);
@@ -39,11 +42,76 @@ export function printSearchText(p) {
     return parts.filter(Boolean).join(' ').toLowerCase();
 }
 
+/** Show only prints with this tag ('all' clears it). */
+export function filterByTag(key) {
+    printTagFilter.value = key;
+    if (printTagFilter.value !== key) printTagFilter.value = 'all';
+    renderPrints();
+}
+
+/** The tag drop-down and the totals table. Both stay hidden until some print has a tag. */
+export function renderTagControls() {
+    const totals = tagTotals();
+    const keep = printTagFilter.value;
+    printTagFilter.replaceChildren();
+    const every = h('option', 'option-input', 'All tags');
+    every.value = 'all';
+    printTagFilter.appendChild(every);
+    for (const t of totals) {
+        const o = h('option', 'option-input', `${t.tag} (${t.prints})`);
+        o.value = t.key;
+        printTagFilter.appendChild(o);
+    }
+    printTagFilter.value = totals.some((t) => t.key === keep) ? keep : 'all';
+    printTagFilter.hidden = totals.length === 0;
+
+    const panel = $('tag-totals');
+    panel.hidden = totals.length === 0;
+    const summary = h('summary', 'panel-title', 'Totals per tag');
+    panel.replaceChildren(summary);
+    if (totals.length === 0) return;
+    panel.appendChild(h('p', 'secondary-text small', 'Everything printed under each tag. A print with several tags counts under each of them.'));
+    const wrap = h('div', 'table-scroll');
+    const table = h('table', 'data-table tag-table');
+    const head = h('tr');
+    for (const [label, num] of [['Tag', false], ['Prints', true], ['Time', true], ['Filament', true], ['Cost', true]]) {
+        const th = h('th', num ? 'num' : null, label);
+        th.scope = 'col';
+        head.appendChild(th);
+    }
+    table.appendChild(h('thead')).appendChild(head);
+    const body = h('tbody');
+    for (const t of totals) {
+        const row = h('tr', t.key === printTagFilter.value ? 'is-selected' : null);
+        row.dataset.tag = t.key;
+        const first = h('th');
+        first.scope = 'row';
+        const show = h('button', 'link-button', t.tag);
+        show.type = 'button';
+        show.title = `Show only prints tagged "${t.tag}"`;
+        show.addEventListener('click', () => filterByTag(t.key));
+        first.appendChild(show);
+        row.appendChild(first);
+        const cells = [
+            t.failed > 0 ? `${t.prints} (${t.failed} failed)` : String(t.prints),
+            fmtDuration(t.minutes) || '-',
+            `${fmtGrams(t.grams)}g`,
+            t.cost > 0 ? fmtMoney(t.cost) : '-'
+        ];
+        for (const c of cells) row.appendChild(h('td', 'num', c));
+        body.appendChild(row);
+    }
+    table.appendChild(body);
+    wrap.appendChild(table);
+    panel.appendChild(wrap);
+}
+
 export function renderPrints() {
     printList.replaceChildren();
 
     const all = Object.entries(state.prints).filter(([, p]) => isObject(p));
     $('prints-toolbar').hidden = all.length === 0;
+    renderTagControls();
 
     if (all.length === 0) {
         $('prints-sub').textContent = 'Everything you have printed.';
@@ -57,6 +125,7 @@ export function renderPrints() {
     let entries = all.filter(([, p]) => {
         if (filter === 'success' && !p.result) return false;
         if (filter === 'failure' && p.result) return false;
+        if (printTagFilter.value !== 'all' && !tagsOf(p).some((t) => tagKey(t) === printTagFilter.value)) return false;
         return query === '' || printSearchText(p).includes(query);
     });
 
@@ -149,6 +218,19 @@ export function buildPrintCard(id, p) {
         if (chips.children.length > 0) card.appendChild(chips);
     }
 
+    const tags = tagsOf(p);
+    if (tags.length > 0) {
+        const chips = h('div', 'chips tag-chips');
+        for (const tag of tags) {
+            const chip = h('button', 'chip chip-tag chip-button', tag);
+            chip.type = 'button';
+            chip.title = `Show only prints tagged "${tag}"`;
+            chip.addEventListener('click', () => filterByTag(tagKey(tag)));
+            chips.appendChild(chip);
+        }
+        card.appendChild(chips);
+    }
+
     if (typeof p.notes === 'string' && p.notes.trim() !== '') {
         card.appendChild(h('p', 'card-notes', p.notes.trim()));
     }
@@ -166,7 +248,7 @@ export function buildPrintCard(id, p) {
     again.addEventListener('click', () => openPrintPopup({ copyFromId: id }));
     buttons.appendChild(again);
 
-    const queue = h('button', 'btn btn-outline btn-small queue-add', 'Add to queue');
+    const queue = h('button', 'btn btn-outline btn-small print-queue-add', 'Add to queue');
     queue.type = 'button';
     queue.title = 'Put this on your queue with the same filament, print time and profile';
     queue.addEventListener('click', () => addPrintToQueue(id));
@@ -189,7 +271,7 @@ export function addPrintToQueue(id) {
     const item = { name: String(p.name || 'Untitled print').slice(0, 80), link: link === null ? '' : link, done: false };
     const spec = cleanQueueSpec({
         minutes: p.minutes, usage: usageOf(p).filter((u) => isObject(state.spools[u.spoolId])),
-        profile: p.profile, notes: p.notes, printerId: printerIdOf(p)
+        profile: p.profile, notes: p.notes, tags: tagsOf(p), printerId: printerIdOf(p)
     });
     if (spec) item.spec = spec;
     const queueId = uid();

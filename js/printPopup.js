@@ -1,8 +1,8 @@
 import { amsLoadedList, amsSlotLabel } from './ams.js';
-import { activeSpools, gramsUsedOfSpool, hasManyPrinters, printerIdOf, printerIds, printerName, remainingOf, usageOf } from './calc.js';
+import { activeSpools, gramsUsedOfSpool, hasManyPrinters, printerIdOf, printerIds, printerName, remainingOf, tagKey, tagTotals, tagsOf, usageOf } from './calc.js';
 import { FAIL_REASONS } from './constants.js';
 import { renderAll } from './render.js';
-import { cleanFailReason, cleanProfile, cleanQueueSpec, saveState, state } from './state.js';
+import { cleanFailReason, cleanProfile, cleanQueueSpec, cleanTags, saveState, state } from './state.js';
 import { $, clearError, fmtGrams, h, isObject, isValidDate, makeSwatch, normalizeLink, notify, showError, spoolHex, todayLocal, uid, validMinutes } from './util.js';
 
 // ---------- Print popup (create and edit) ----------
@@ -19,6 +19,8 @@ export const resultSuccess = $('result-rinput1');
 export const resultFailure = $('result-rinput2');
 export const failField = $('fail-reason-field');
 export const failSelect = $('fail-reason-select');
+export const tagsInput = $('tags-tinput');
+export const tagSuggestions = $('tag-suggestions');
 export const printerField = $('printer-field');
 export const printerSelect = $('printer-select');
 export const profileInputs = {
@@ -93,6 +95,8 @@ export function openPrintPopup({ printId = null, copyFromId = null, name = '', l
     failSelect.value = print && !print.result ? cleanFailReason(print.failReason, false) : '';
     const profile = source ? cleanProfile(source.profile) : null;   // "Print again" keeps the profile
     for (const key of Object.keys(profileInputs)) profileInputs[key].value = profile ? profile[key] : '';
+    tagsInput.value = source ? tagsOf(source).join(', ') : '';
+    renderTagSuggestions();
     syncFailField();
 
     rowList.replaceChildren();
@@ -113,6 +117,28 @@ export function openPrintPopup({ printId = null, copyFromId = null, name = '', l
     updateBodyLock();
     nameInput.focus();
 }
+
+/** Buttons for the tags you already use: one click adds (or removes) that tag in the field. */
+export function renderTagSuggestions() {
+    tagSuggestions.replaceChildren();
+    const chosen = new Set(cleanTags(tagsInput.value).map(tagKey));
+    const rows = tagTotals().slice(0, 12);
+    tagSuggestions.hidden = rows.length === 0;
+    for (const { tag, key } of rows) {
+        const on = chosen.has(key);
+        const chip = h('button', on ? 'chip chip-button chip-tag is-on' : 'chip chip-button chip-tag', tag);
+        chip.type = 'button';
+        chip.setAttribute('aria-pressed', String(on));
+        chip.addEventListener('click', () => {
+            const current = cleanTags(tagsInput.value);
+            const next = on ? current.filter((t) => tagKey(t) !== key) : [...current, tag];
+            tagsInput.value = next.join(', ');
+            renderTagSuggestions();
+        });
+        tagSuggestions.appendChild(chip);
+    }
+}
+tagsInput.addEventListener('input', renderTagSuggestions);
 
 /** The printer of the newest print, which is usually the one you are about to use again. */
 export function lastPrinterId() {
@@ -319,6 +345,7 @@ export function savePrint() {
             name: profileInputs.name.value, layer: profileInputs.layer.value,
             infill: profileInputs.infill.value, supports: profileInputs.supports.value
         }),
+        tags: cleanTags(tagsInput.value),
         printerId: hasManyPrinters() && printerIds().includes(printerSelect.value) ? printerSelect.value : ''
     };
     if (editingPrintId && state.prints[editingPrintId]) {

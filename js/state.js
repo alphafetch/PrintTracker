@@ -209,6 +209,26 @@ export function cleanUi(raw) {
     };
 }
 
+export const MAX_TAGS = 8;
+export const MAX_TAG_LENGTH = 24;
+
+/** Tags for a print: an array (or comma-separated text) cleaned to short, unique labels. Duplicates ignore case. */
+export function cleanTags(raw) {
+    const list = Array.isArray(raw) ? raw : (typeof raw === 'string' ? raw.split(',') : []);
+    const out = [];
+    const seen = new Set();
+    for (const item of list) {
+        if (typeof item !== 'string') continue;
+        const tag = cleanText(item.replace(/[,;]/g, ' ').replace(/\s+/g, ' '), MAX_TAG_LENGTH).trim();
+        const key = tag.toLowerCase();
+        if (tag === '' || seen.has(key)) continue;
+        seen.add(key);
+        out.push(tag);
+        if (out.length >= MAX_TAGS) break;
+    }
+    return out;
+}
+
 /** Print-profile notes: { name, layer, infill, supports } of short text, or null when all are empty. */
 export function cleanProfile(raw) {
     if (!isObject(raw)) return null;
@@ -240,9 +260,10 @@ export function cleanQueueSpec(raw) {
         usage,
         profile: cleanProfile(raw.profile),
         notes: cleanText(raw.notes, 500),
+        tags: cleanTags(raw.tags),
         printerId: typeof raw.printerId === 'string' && isSafeId(raw.printerId) ? raw.printerId : ''
     };
-    return spec.minutes || usage.length > 0 || spec.profile || spec.notes || spec.printerId ? spec : null;
+    return spec.minutes || usage.length > 0 || spec.profile || spec.notes || spec.tags.length > 0 || spec.printerId ? spec : null;
 }
 
 export function cleanFailReason(raw, result) {

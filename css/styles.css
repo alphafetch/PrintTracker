@@ -1379,3 +1379,24 @@ html[data-density="compact"] .page-head { margin-bottom: 12px; }
 .twin-text { flex: 1 1 0; }
 .twin-row { flex-wrap: nowrap; }
 .twin-text .list-title, .twin-text .list-sub, .shopping-text .list-title, .shopping-text .list-sub { white-space: normal; overflow-wrap: anywhere; }
+
+/* ---------- Tags ---------- */
+
+.chip-tag { background: var(--purple-soft); border-color: transparent; color: var(--purple); }
+.chip-tag.chip-button { color: var(--purple); }
+.chip-tag.chip-button:hover { border-color: var(--purple); background: var(--purple-soft); }
+.chip-tag.is-on { background: var(--purple); color: var(--bg); }
+:root[data-theme="light"] .chip-tag { color: #5b3fc4; }
+:root[data-theme="light"] .chip-tag.chip-button { color: #5b3fc4; }
+:root[data-theme="light"] .chip-tag.is-on { background: #5b3fc4; color: #fff; }
+.tag-suggestions { margin-top: 8px; }
+.tag-chips { margin-top: 8px; }
+.tag-panel { margin-bottom: calc(16px * var(--d)); }
+.tag-panel > summary { cursor: pointer; margin-bottom: 0; }
+.tag-panel[open] > summary { margin-bottom: 12px; }
+.tag-table { min-width: 460px; }
+.tag-table .num { text-align: right; }
+.tag-table tr.is-selected th, .tag-table tr.is-selected td { background: var(--accent-soft); }
+.tag-table th[scope="row"] { font-weight: 600; text-align: left; }
+.link-button { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--link); cursor: pointer; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
+.link-button:hover { color: var(--accent-strong); }

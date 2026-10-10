@@ -1,6 +1,6 @@
 import { printerName } from './calc.js';
 import { FAIL_REASONS } from './constants.js';
-import { cleanProfile, state } from './state.js';
+import { cleanProfile, cleanTags, state } from './state.js';
 import { cleanText, isObject, isValidDate, normalizeLink, uid, validMinutes } from './util.js';
 
 // ---------- CSV import ----------
@@ -57,7 +57,8 @@ const HEADER_ALIASES = {
     layer: ['layerheight', 'layer'],
     infill: ['infill'],
     supports: ['supports', 'support'],
-    printer: ['printer', 'printername']
+    printer: ['printer', 'printername'],
+    tags: ['tags', 'tag', 'labels', 'label']
 };
 
 function columnMap(header) {
@@ -212,6 +213,7 @@ export function planCsvImport(text) {
                 name: cell(row, 'profile'), layer: cell(row, 'layer'),
                 infill: cell(row, 'infill'), supports: cell(row, 'supports')
             }),
+            tags: cleanTags(cell(row, 'tags').split(/[;,]/)),
             printerId: printerByName.get(cell(row, 'printer').trim().toLowerCase()) || ''
         });
     }
