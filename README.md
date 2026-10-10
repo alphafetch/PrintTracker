@@ -35,7 +35,7 @@ A personal 3D print and filament tracker for Bambu Lab, FlashForge and ELEGOO pr
 
 `1`-`6` switch tabs, `N` new print, `S` add a spool, `/` search prints, `T` toggle theme, `?` shortcut list. Turn off in Settings.
 
-## Running it
+## Running it locally (not GitHub pages link)
 
 Open it through a local server (ES modules do not work from `file://`):
 
@@ -44,6 +44,10 @@ python -m http.server 8000
 ```
 
 Then visit http://localhost:8000.
+
+### Pages link
+
+The GitHub pages link is https://...
 
 ## Project structure
 
