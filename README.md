@@ -47,7 +47,7 @@ Then visit http://localhost:8000.
 
 ### Pages link
 
-The GitHub pages link is https://...
+The GitHub pages link is [here](https://alphafetch.github.io/PrintTracker/).
 
 ## Project structure
 
