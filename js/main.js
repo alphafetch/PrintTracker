@@ -121,15 +121,7 @@ const linkInput = document.getElementById('link-tinput');
 const filamentRowTemplate = document.getElementById('filament-row-template');
 const filamentRowsDiv = document.getElementById('filament-rows');
 
-const clone = document.importNode(filamentRowTemplate.content, true);
-    const spoolDropdown = clone.querySelector('select[name="spool-select"]');
-    const gramCostInput = clone.querySelector('input[type="number"]');
-    addSpoolsToDropdown(spoolDropdown);
-    spoolDropdown.style.margin = '10px';
-    spoolDropdown.style.marginRight = '5px';
-    gramCostInput.style.margin = '10px';
-    gramCostInput.style.marginLeft = '5px';
-filamentRowsDiv.appendChild(clone);
+addFilamentRow(filamentRowsDiv);
 
 createPrintButton.addEventListener('click', () => {   
     const resultInputRadio1TF = document.getElementById('result-rinput1').checked;
@@ -624,6 +616,20 @@ function spoolIsUsed(id) {
     }
 
     return false;
+}
+
+function addFilamentRow(filaRowsDiv) {
+    const clone = document.importNode(filamentRowTemplate.content, true);
+        const spoolDropdown = clone.querySelector('select[name="spool-select"]');
+        const gramCostInput = clone.querySelector('input[type="number"]');
+        addSpoolsToDropdown(spoolDropdown);
+        spoolDropdown.style.margin = '10px';
+        spoolDropdown.style.marginRight = '5px';
+        gramCostInput.style.margin = '10px';
+        gramCostInput.style.marginLeft = '5px';
+        filaRowsDiv.style.margin = '5px';
+        filaRowsDiv.style.width = '100%';
+    filaRowsDiv.appendChild(clone);
 }
 
 function showTab(t) {
