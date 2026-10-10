@@ -1,20 +1,106 @@
-import { effectiveKwh, effectiveWatts, hardwareCost } from './calc.js';
+import { effectiveKwh, effectivePrice, effectiveWatts, extraPrinters, hardwareCost, hasManyPrinters, printerIds, printerName } from './calc.js';
 import { BRANDS, autoAmsPrice, autoKwh, autoPrice, autoWatts, findPrinter, modelsFor, wattsHint } from './catalog.js';
-import { NOZZLES } from './constants.js';
+import { MAX_EXTRA_PRINTERS, NOZZLES } from './constants.js';
 import { renderAll } from './render.js';
-import { saveState, state } from './state.js';
-import { fmtMoney, h } from './util.js';
+import { cleanPrinter, saveState, state } from './state.js';
+import { fmtMoney, h, notify, uid } from './util.js';
 
-import { commitSettings, addSync, settingRow, settingCard, selectField, numberField, textField, dateField, autoValueField } from './settingsKit.js';
+import { commitSettings, addSync, syncAllSettings, settingRow, settingCard, selectField, numberField, textField, dateField, autoValueField } from './settingsKit.js';
 
 // ---------- Settings: printer ----------
+
+/** Which printer the fields below are editing: '' is the main one, else an extra printer's id. */
+let editing = '';
+
+function editedId() {
+    return editing !== '' && Object.prototype.hasOwnProperty.call(extraPrinters(), editing) ? editing : '';
+}
+
+/** The printer being edited. */
+function cfg() {
+    const id = editedId();
+    return id === '' ? state.settings.printer : state.settings.printers[id];
+}
+
+/** Same, inside a settings copy being changed by commitSettings. */
+function editedIn(st) {
+    const id = editedId();
+    return id === '' ? st.printer : st.printers[id];
+}
+
+/** Remove an extra printer. Its prints go back to the main printer; its upkeep tasks and parts are removed. Undo restores all of it. */
+export function removePrinter(id) {
+    const printer = state.settings.printers[id];
+    if (!printer) return;
+    const printIds = Object.entries(state.prints).filter(([, p]) => p && p.printerId === id).map(([pid]) => pid);
+    const tasks = Object.entries(state.maintenance).filter(([, t]) => t.printerId === id);
+    const parts = Object.entries(state.parts).filter(([, p]) => p.printerId === id);
+    const name = printerName(id);
+    for (const pid of printIds) state.prints[pid].printerId = '';
+    for (const [tid] of tasks) delete state.maintenance[tid];
+    for (const [pid] of parts) delete state.parts[pid];
+    if (editing === id) editing = '';
+    commitSettings((st) => { delete st.printers[id]; });
+    notify(`Removed ${name}. Its ${printIds.length === 1 ? 'print is' : 'prints are'} now counted on the main printer.`, {
+        action: {
+            label: 'Undo',
+            onClick: () => {
+                for (const pid of printIds) if (state.prints[pid]) state.prints[pid].printerId = id;
+                for (const [tid, t] of tasks) state.maintenance[tid] = t;
+                for (const [pid, p] of parts) state.parts[pid] = p;
+                commitSettings((st) => { st.printers[id] = printer; });
+            }
+        }
+    });
+}
+
+function buildPrinterPicker(root) {
+    const card = settingCard('Your printers', 'Got a second printer? Add it here. Each one keeps its own hours, upkeep, wear and electricity cost.');
+    const pick = h('select', 'dropdown');
+    pick.id = 'set-printer-pick';
+    pick.addEventListener('change', () => { editing = pick.value; syncAllSettings(); });
+    const add = h('button', 'btn btn-outline btn-small', 'Add another printer');
+    add.type = 'button';
+    add.id = 'set-printer-add';
+    add.addEventListener('click', () => {
+        if (Object.keys(extraPrinters()).length >= MAX_EXTRA_PRINTERS) return notify(`You can add up to ${MAX_EXTRA_PRINTERS} more printers.`, true);
+        const id = uid();
+        commitSettings((st) => { st.printers[id] = cleanPrinter({}); });
+        editing = id;
+        syncAllSettings();
+        const brand = document.getElementById('set-printer-brand');
+        if (brand) brand.focus();
+        return true;
+    });
+    const remove = h('button', 'btn btn-danger-ghost btn-small', 'Remove this printer');
+    remove.type = 'button';
+    remove.id = 'set-printer-remove';
+    remove.addEventListener('click', () => removePrinter(editedId()));
+    const actions = h('div', 'data-actions');
+    actions.append(add, remove);
+    card.appendChild(settingRow('set-printer-pick', 'Editing', 'The cards below show this printer.', pick));
+    card.appendChild(actions);
+    addSync(() => {
+        const keep = editedId();
+        pick.replaceChildren();
+        printerIds().forEach((id, i) => {
+            const o = h('option', 'option-input', hasManyPrinters() ? `${i + 1}. ${printerName(id)}` : `${printerName(id)}`);
+            o.value = id;
+            pick.appendChild(o);
+        });
+        pick.value = keep;
+        remove.hidden = keep === '';
+        add.disabled = Object.keys(extraPrinters()).length >= MAX_EXTRA_PRINTERS;
+    });
+    root.appendChild(card);
+}
 
 function modelField(id) {
     const select = h('select', 'dropdown');
     select.id = id;
-    select.addEventListener('change', () => commitSettings((st) => { st.printer.model = select.value; }));
+    select.addEventListener('change', () => commitSettings((st) => { editedIn(st).model = select.value; }));
     addSync(() => {
-        const { brand, model } = state.settings.printer;
+        const { brand, model } = cfg();
         select.replaceChildren();
         const none = h('option', null, brand ? 'Not set' : 'Pick a brand first');
         none.value = '';
@@ -37,26 +123,27 @@ function modelField(id) {
  */
 
 export function buildPrinterSettings(root) {
+    buildPrinterPicker(root);
     const printer = settingCard('Your printer', 'Shown on the dashboard. Everything here is optional.');
-    const set = (fn) => commitSettings((st) => fn(st.printer));
+    const set = (fn) => commitSettings((st) => fn(editedIn(st)));
     printer.appendChild(settingRow('set-printer-brand', 'Brand', null,
         selectField('set-printer-brand', [['', 'Not set'], ...BRANDS.map((b) => [b.key, b.label])],
-            () => state.settings.printer.brand,
+            () => cfg().brand,
             (v) => set((p) => { p.brand = v; if (!findPrinter(v, p.model)) p.model = ''; }))));
     printer.appendChild(settingRow('set-printer-model', 'Model', null, modelField('set-printer-model')));
     printer.appendChild(settingRow('set-printer-name', 'Nickname', 'Something to call it, like "Benchy HQ".',
         textField('set-printer-name', { maxlength: 40, placeholder: 'e.g., Workhorse' },
-            () => state.settings.printer.nickname, (v) => set((p) => { p.nickname = v; }))));
+            () => cfg().nickname, (v) => set((p) => { p.nickname = v; }))));
     printer.appendChild(settingRow('set-printer-nozzle', 'Nozzle size', null,
         selectField('set-printer-nozzle', NOZZLES.map((n) => [n, `${n} mm`]),
-            () => state.settings.printer.nozzle, (v) => set((p) => { p.nozzle = v; }))));
+            () => cfg().nozzle, (v) => set((p) => { p.nozzle = v; }))));
     printer.appendChild(settingRow('set-printer-date', 'Arrival or purchase date', 'A future date becomes a countdown on the dashboard.',
-        dateField('set-printer-date', () => state.settings.printer.date, (v) => set((p) => { p.date = v; }))));
+        dateField('set-printer-date', () => cfg().date, (v) => set((p) => { p.date = v; }))));
     printer.appendChild(settingRow('set-printer-price', 'Price paid', null,
         autoValueField('set-printer-price', {
             label: 'price paid', min: 0, max: 10000000, step: 0.01,
-            get: () => state.settings.printer.price,
-            auto: () => { const { brand, model } = state.settings.printer; return autoPrice(brand, model, state.settings.currency); },
+            get: () => cfg().price,
+            auto: () => { const { brand, model } = cfg(); return autoPrice(brand, model, state.settings.currency); },
             set: (v) => set((p) => { p.price = v; }),
             unit: () => state.settings.currency,
             format: (v) => fmtMoney(v),
@@ -68,13 +155,13 @@ export function buildPrinterSettings(root) {
     power.appendChild(settingRow('set-printer-watts', 'Average power while printing', null,
         autoValueField('set-printer-watts', {
             label: 'average power', min: 0, max: 5000, step: 1,
-            get: () => state.settings.printer.watts,
-            auto: () => { const { brand, model } = state.settings.printer; return autoWatts(brand, model); },
+            get: () => cfg().watts,
+            auto: () => { const { brand, model } = cfg(); return autoWatts(brand, model); },
             set: (v) => set((p) => { p.watts = v; }),
             unit: 'W',
             format: (v) => `${v} W`,
             emptyNote: () => {
-                const { brand, model } = state.settings.printer;
+                const { brand, model } = cfg();
                 return wattsHint(brand, model) ||
                     'No official average for this printer. Use a plug-in power meter, or tap the pencil to enter a number.';
             }
@@ -82,7 +169,7 @@ export function buildPrinterSettings(root) {
     power.appendChild(settingRow('set-printer-kwh', 'Electricity price', 'Per kilowatt-hour, in your currency.',
         autoValueField('set-printer-kwh', {
             label: 'electricity price', min: 0, max: 100, step: 0.0001,
-            get: () => state.settings.printer.kwhPrice,
+            get: () => cfg().kwhPrice,
             auto: () => autoKwh(state.settings.currency),
             set: (v) => set((p) => { p.kwhPrice = v; }),
             unit: () => `${state.settings.currency} per kWh`,
@@ -93,8 +180,8 @@ export function buildPrinterSettings(root) {
     preview.id = 'energy-preview';
     power.appendChild(preview);
     addSync(() => {
-        const w = effectiveWatts();
-        const k = effectiveKwh();
+        const w = effectiveWatts(cfg());
+        const k = effectiveKwh(cfg());
         preview.textContent = w && k && w.value > 0 && k.value > 0
             ? `A 5 hour print would use about ${fmtMoney(5 * (w.value / 1000) * k.value)} of electricity.`
             : 'Fill in both values to see an example.';
@@ -104,12 +191,12 @@ export function buildPrinterSettings(root) {
     const wear = settingCard('Machine wear', 'Nozzles, build plates and AMS parts wear out. Enter what that costs per hour of printing and it is added to each print\'s cost. Leave it empty to ignore wear.');
     wear.appendChild(settingRow('set-printer-wear', 'Wear cost per print hour', 'For example, a $20 nozzle that lasts 200 hours is $0.10 per hour.',
         numberField('set-printer-wear', { min: 0, max: 10000, step: 'any', placeholder: 'e.g., 0.10', unit: 'per hour' },
-            () => state.settings.printer.wear, (v) => set((p) => { p.wear = v; }))));
+            () => cfg().wear, (v) => set((p) => { p.wear = v; }))));
     const wearPreview = h('p', 'secondary-text small');
     wearPreview.id = 'wear-preview';
     wear.appendChild(wearPreview);
     addSync(() => {
-        const rate = state.settings.printer.wear;
+        const rate = cfg().wear;
         wearPreview.textContent = rate > 0
             ? `A 5 hour print would add about ${fmtMoney(5 * rate)} of machine wear.`
             : 'Not counted in print costs right now.';
@@ -157,9 +244,14 @@ export function renderCostCard() {
     const c = hardwareCost();
     costSummaryEl.replaceChildren();
     const line = (text) => costSummaryEl.appendChild(h('li', null, text));
-    line(c.printer === null ? 'Printer: no price set' : `Printer: ${fmtMoney(c.printer)}${c.estimate ? ' (typical store price)' : ''}`);
+    const mainAuto = effectivePrice();
+    line(c.printer === null ? 'Printer: no price set' : `Printer: ${fmtMoney(c.printer)}${mainAuto && mainAuto.auto ? ' (typical store price)' : ''}`);
+    Object.entries(extraPrinters()).forEach(([id, p], i) => {
+        const price = effectivePrice(p);
+        line(`Printer ${i + 2} (${printerName(id)}): ${price ? fmtMoney(price.value) + (price.auto ? ' (typical store price)' : '') : 'no price set'}`);
+    });
     if (c.amsUnits > 0) line(`AMS: ${fmtMoney(c.ams)}${c.amsEstimate ? ' (includes typical store prices)' : ''}${c.amsPriced < c.amsUnits ? ` (${c.amsUnits - c.amsPriced} without a price)` : ''}`);
-    line(`Printer and AMS: ${fmtMoney(c.hardware)}`);
+    line(`${c.printerCount > 1 ? 'Printers' : 'Printer'} and AMS: ${fmtMoney(c.hardware)}`);
     line(`Filament bought: ${fmtMoney(c.filament)}`);
     const total = h('li', 'cost-total');
     total.id = 'cost-total';

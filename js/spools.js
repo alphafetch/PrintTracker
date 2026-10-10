@@ -1,4 +1,4 @@
-import { daysOpen, gramsUsedOfSpool, lowFraction, needsDrying, printsUsingSpool, remainingOf, warnFraction } from './calc.js';
+import { daysOpen, describeDays, gramsUsedOfSpool, lowFraction, needsDrying, printsUsingSpool, remainingOf, spoolForecast, warnFraction } from './calc.js';
 import { restoreSlots, slotsHolding, unloadSpool } from './ams.js';
 import { dryingAdvice } from './catalog.js';
 import { setupLabelsButton } from './labels.js';
@@ -131,6 +131,15 @@ export function buildSpoolCard(id, s) {
     const uses = printsUsingSpool(id);
     card.appendChild(h('div', 'card-meta card-meta-soft',
         uses === 0 ? 'Not used yet' : `Used in ${plural(uses, 'print')} · ${fmtGrams(used)}g logged`));
+
+    const forecast = spoolForecast(id, s);
+    if (forecast) {
+        const pace = `${fmtGrams(forecast.perWeek)}g a week`;
+        const line = forecast.daysLeft > 365
+            ? `At your pace (${pace}) this spool will last over a year.`
+            : `At your pace (${pace}) it runs out in ${describeDays(forecast.daysLeft)}, around ${formatDate(forecast.date)}.`;
+        card.appendChild(h('div', 'card-meta card-meta-soft forecast-line', line));
+    }
 
     if (!s.archived) {
         const days = daysOpen(id, s);

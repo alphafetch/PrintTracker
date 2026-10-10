@@ -1,9 +1,9 @@
-import { costOfPrint, energyCostOfPrint, totalGramsOfPrint, usageOf, wearCostOfPrint } from './calc.js';
+import { costOfPrint, energyCostOfPrint, hasManyPrinters, printerIdOf, printerName, totalGramsOfPrint, usageOf, wearCostOfPrint } from './calc.js';
 import { DEFAULT_SWATCH, failReasonLabel } from './constants.js';
 import { openPrintPopup } from './printPopup.js';
 import { emptyState_, makeBadge, plural, renderAll } from './render.js';
-import { saveState, state } from './state.js';
-import { $, fmtDuration, fmtGrams, fmtMoney, formatDate, h, icon, isObject, makeLink, makeSwatch, normalizeLink, notify, spoolHex } from './util.js';
+import { cleanQueueSpec, saveState, state } from './state.js';
+import { $, fmtDuration, fmtGrams, fmtMoney, formatDate, h, icon, isObject, makeLink, makeSwatch, normalizeLink, notify, spoolHex, uid } from './util.js';
 
 // ---------- Rendering: prints ----------
 
@@ -31,6 +31,7 @@ export function printSearchText(p) {
     const prof = isObject(p.profile) ? p.profile : {};
     const parts = [p.name, p.notes, p.link, p.date, formatDate(p.date), p.result ? 'success' : 'failure failed',
         failReasonLabel(p.failReason), prof.name, prof.layer, prof.infill, prof.supports];
+    if (hasManyPrinters()) parts.push(printerName(printerIdOf(p)));
     for (const u of usageOf(p)) {
         const s = state.spools[u.spoolId];
         if (s) parts.push(s.brand, s.color, s.material);
@@ -115,6 +116,12 @@ export function buildPrintCard(id, p) {
         c.title = parts.length > 1 ? parts.join(' + ') : 'Estimated filament cost';
         meta.appendChild(c);
     }
+    if (hasManyPrinters()) {
+        const pr = h('span', 'meta-item print-printer');
+        pr.appendChild(icon('cube'));
+        pr.append(printerName(printerIdOf(p)));
+        meta.appendChild(pr);
+    }
     const safeLink = normalizeLink(p.link);
     if (safeLink) meta.appendChild(makeLink(safeLink));
     card.appendChild(meta);
@@ -159,6 +166,12 @@ export function buildPrintCard(id, p) {
     again.addEventListener('click', () => openPrintPopup({ copyFromId: id }));
     buttons.appendChild(again);
 
+    const queue = h('button', 'btn btn-outline btn-small queue-add', 'Add to queue');
+    queue.type = 'button';
+    queue.title = 'Put this on your queue with the same filament, print time and profile';
+    queue.addEventListener('click', () => addPrintToQueue(id));
+    buttons.appendChild(queue);
+
     const del = h('button', 'btn btn-danger-ghost btn-small', 'Delete');
     del.type = 'button';
     del.addEventListener('click', () => deletePrint(id));
@@ -166,6 +179,26 @@ export function buildPrintCard(id, p) {
 
     card.appendChild(buttons);
     return card;
+}
+
+/** Put a copy of a past print on the queue, keeping its filament, print time, profile, notes and printer. */
+export function addPrintToQueue(id) {
+    const p = state.prints[id];
+    if (!isObject(p)) return;
+    const link = normalizeLink(p.link);
+    const item = { name: String(p.name || 'Untitled print').slice(0, 80), link: link === null ? '' : link, done: false };
+    const spec = cleanQueueSpec({
+        minutes: p.minutes, usage: usageOf(p).filter((u) => isObject(state.spools[u.spoolId])),
+        profile: p.profile, notes: p.notes, printerId: printerIdOf(p)
+    });
+    if (spec) item.spec = spec;
+    const queueId = uid();
+    state.queue[queueId] = item;
+    saveState();
+    renderAll();
+    notify(`Added "${item.name}" to the queue.`, {
+        action: { label: 'Undo', onClick: () => { delete state.queue[queueId]; saveState(); renderAll(); } }
+    });
 }
 
 export function deletePrint(id) {

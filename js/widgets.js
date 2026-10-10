@@ -1,5 +1,5 @@
 import { BRANDS } from './catalog.js';
-import { calcStats, effectivePrice, hardwareCost } from './calc.js';
+import { calcStats, effectivePrice, hardwareCost, hasManyPrinters, printerCfg, printerIds, printerStats } from './calc.js';
 import { SPOOL_GRAMS, UNIT_LABELS } from './constants.js';
 import { dashPanel } from './dashboard.js';
 import { exportData } from './data.js';
@@ -62,17 +62,31 @@ export function buildBackupBanner() {
     return banner;
 }
 
-export function maintenanceStatus(stats) {
+/**
+ * Every upkeep task with how much of its interval is used. `stats` is the all-prints stats; when there is more
+ * than one printer, each task counts only its own printer's prints. `printerId` limits the list to one printer.
+ */
+export function maintenanceStatus(stats, printerId = null) {
     const today = todayLocal();
-    const hoursNow = stats.minutes / 60;
-    const list = Object.entries(state.maintenance).map(([id, task]) => {
-        const used = task.unit === 'hours' ? Math.max(0, hoursNow - task.atHours)
-            : task.unit === 'prints' ? Math.max(0, stats.total - task.atPrints)
-            : task.unit === 'spools' ? Math.max(0, (stats.grams - task.atGrams) / SPOOL_GRAMS)
-            : Math.max(0, daysBetween(task.lastDate, today));
-        const remaining = task.every - used;
-        return { id, task, used, remaining, fraction: used / task.every, due: remaining <= 0 };
-    });
+    const many = hasManyPrinters();
+    const cache = {};
+    const statsOf = (task) => {
+        if (!many) return stats;
+        const id = task.printerId || '';
+        if (!cache[id]) cache[id] = calcStats('all', id);
+        return cache[id];
+    };
+    const list = Object.entries(state.maintenance)
+        .filter(([, task]) => printerId === null || (task.printerId || '') === printerId)
+        .map(([id, task]) => {
+            const st = statsOf(task);
+            const used = task.unit === 'hours' ? Math.max(0, st.minutes / 60 - task.atHours)
+                : task.unit === 'prints' ? Math.max(0, st.total - task.atPrints)
+                : task.unit === 'spools' ? Math.max(0, (st.grams - task.atGrams) / SPOOL_GRAMS)
+                : Math.max(0, daysBetween(task.lastDate, today));
+            const remaining = task.every - used;
+            return { id, task, used, remaining, fraction: used / task.every, due: remaining <= 0 };
+        });
     list.sort((a, b) => b.fraction - a.fraction);
     return list;
 }
@@ -93,7 +107,7 @@ export function markMaintenanceDone(id) {
     const task = state.maintenance[id];
     if (!task) return;
     const before = { ...task };
-    const stats = calcStats();
+    const stats = printerStats(task.printerId || '');
     task.lastDate = todayLocal();
     task.atHours = stats.minutes / 60;
     task.atPrints = stats.total;
@@ -161,16 +175,19 @@ export function buildMaintenanceRow(m, { withDelete = false } = {}) {
     return row;
 }
 
-export function buildPrinterPanel(stats) {
-    const pr = state.settings.printer;
-    const tasks = maintenanceStatus(stats);
+export function buildPrinterPanel(allStats, id = '') {
+    const many = hasManyPrinters();
+    const pr = printerCfg(id);
+    const stats = many ? calcStats('all', id) : allStats;
+    const tasks = maintenanceStatus(allStats, many ? id : null);
     const brand = BRANDS.find((b) => b.key === pr.brand);
     const brandName = brand && brand.key !== 'other' ? brand.label : '';
     const modelName = pr.model && pr.model !== 'Other' ? `${brandName} ${pr.model}`.trim() : brandName;
-    const configured = Boolean(modelName || pr.nickname || pr.date || pr.brand);
+    const configured = Boolean(modelName || pr.nickname || pr.date || pr.brand) || (many && stats.total > 0);
 
-    const panel = dashPanel('Printer');
-    panel.id = 'printer-panel';
+    const panel = dashPanel(many ? `Printer ${printerIds().indexOf(id) + 1}` : 'Printer');
+    panel.id = id === '' ? 'printer-panel' : 'printer-panel-' + id;
+    if (id !== '') panel.classList.add('printer-extra');
 
     if (!configured && tasks.length === 0) {
         panel.appendChild(h('p', 'body-text', 'Tell the app about your printer to track its hours, upkeep and electricity.'));
@@ -186,7 +203,7 @@ export function buildPrinterPanel(stats) {
     head.appendChild(h('span', 'printer-icon', ''));
     head.firstChild.appendChild(icon('cube'));
     const names = h('div', 'printer-names');
-    names.appendChild(h('strong', 'printer-name', pr.nickname || modelName || 'My printer'));
+    names.appendChild(h('strong', 'printer-name', pr.nickname || modelName || (id === '' ? 'My printer' : 'Extra printer')));
     const facts = [];
     if (pr.nickname && modelName) facts.push(modelName);
     facts.push(`${pr.nozzle} mm nozzle`);
@@ -201,16 +218,18 @@ export function buildPrinterPanel(stats) {
             : d === 0 ? 'Arrives today' : `In service for ${plural(-d, 'day')} (since ${formatDate(pr.date)})`));
     }
     lines.appendChild(h('li', null, `${fmtDuration(stats.minutes) || '0h'} printed across ${plural(stats.total, 'print')}`));
-    const price = effectivePrice();
+    const price = effectivePrice(pr);
     if (price) {
         lines.appendChild(h('li', null, price.auto ? `About ${fmtMoney(price.value)} (typical store price)` : `Paid ${fmtMoney(price.value)}`));
     }
-    const cost = hardwareCost();
-    if (cost.ams > 0) lines.appendChild(h('li', null, `AMS: ${fmtMoney(cost.ams)}${cost.amsEstimate ? ' (typical)' : ''} \u00B7 printer and AMS ${fmtMoney(cost.hardware)}`));
-    if (cost.hardware > 0 || cost.filament > 0) {
-        const total = h('li', 'cost-total', `Total spent on the setup: ${fmtMoney(cost.total)}`);
-        total.id = 'printer-total';
-        lines.appendChild(total);
+    if (id === '') {
+        const cost = hardwareCost();
+        if (cost.ams > 0) lines.appendChild(h('li', null, `AMS: ${fmtMoney(cost.ams)}${cost.amsEstimate ? ' (typical)' : ''} \u00B7 ${many ? 'printers' : 'printer'} and AMS ${fmtMoney(cost.hardware)}`));
+        if (cost.hardware > 0 || cost.filament > 0) {
+            const total = h('li', 'cost-total', `Total spent on the setup: ${fmtMoney(cost.total)}`);
+            total.id = 'printer-total';
+            lines.appendChild(total);
+        }
     }
     panel.appendChild(lines);
 
@@ -224,4 +243,9 @@ export function buildPrinterPanel(stats) {
     manage.addEventListener('click', () => openSettings('printer'));
     panel.appendChild(manage);
     return panel;
+}
+
+/** One panel per printer (just the main one until more are added). */
+export function buildPrinterPanels(allStats) {
+    return printerIds().map((id) => buildPrinterPanel(allStats, id));
 }

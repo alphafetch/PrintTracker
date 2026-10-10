@@ -1,3 +1,4 @@
+import { printerName } from './calc.js';
 import { FAIL_REASONS } from './constants.js';
 import { cleanProfile, state } from './state.js';
 import { cleanText, isObject, isValidDate, normalizeLink, uid, validMinutes } from './util.js';
@@ -55,7 +56,8 @@ const HEADER_ALIASES = {
     profile: ['profile', 'profilename'],
     layer: ['layerheight', 'layer'],
     infill: ['infill'],
-    supports: ['supports', 'support']
+    supports: ['supports', 'support'],
+    printer: ['printer', 'printername']
 };
 
 function columnMap(header) {
@@ -171,6 +173,9 @@ export function planCsvImport(text) {
     const seen = new Set(Object.values(state.prints).filter(isObject)
         .map((p) => `${p.date}|${String(p.name).toLowerCase()}|${p.minutes ?? ''}`));
 
+    const printerByName = new Map();   // "Workhorse" -> its id (the main printer is '', which is the default)
+    for (const id of Object.keys(state.settings.printers)) printerByName.set(printerName(id).toLowerCase(), id);
+
     const prints = [];
     let duplicates = 0;
     let invalid = 0;
@@ -206,7 +211,8 @@ export function planCsvImport(text) {
             profile: cleanProfile({
                 name: cell(row, 'profile'), layer: cell(row, 'layer'),
                 infill: cell(row, 'infill'), supports: cell(row, 'supports')
-            })
+            }),
+            printerId: printerByName.get(cell(row, 'printer').trim().toLowerCase()) || ''
         });
     }
 

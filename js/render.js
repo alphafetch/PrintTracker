@@ -2,7 +2,9 @@ import { renderAms } from './ams.js';
 import { renderAnalysis } from './analysis.js';
 import { renderDashboard } from './dashboard.js';
 import { renderData } from './data.js';
+import { renderTwins } from './colors.js';
 import { renderMaterialGuide } from './materials.js';
+import { renderShopping } from './shopping.js';
 import { renderSnapshots } from './snapshotPanel.js';
 import { renderPrints } from './prints.js';
 import { renderQueue } from './queue.js';
@@ -27,6 +29,8 @@ export function renderAll() {
     safeRender('prints', renderPrints);
     safeRender('spools', renderSpools);
     safeRender('the AMS', renderAms);
+    safeRender('the shopping list', renderShopping);
+    safeRender('similar colours', renderTwins);
     safeRender('cost analysis', renderAnalysis);
     safeRender('the material guide', renderMaterialGuide);
     safeRender('the queue', renderQueue);

@@ -1,4 +1,4 @@
-import { activeSpools, calcStats, daysOpen, needsDrying } from './calc.js';
+import { activeSpools, calcStats, daysOpen, hasManyPrinters, needsDrying, printerIds, printerName, printerStats } from './calc.js';
 import { MAINT_SETS, defaultSetFor, dryingAdvice } from './catalog.js';
 import { UNIT_LABELS } from './constants.js';
 import { emptyState_, makeBadge, plural, renderAll } from './render.js';
@@ -18,16 +18,26 @@ let presetPickEl = null;
 let presetListEl = null;
 let presetPicked = false;
 
-export function addMaintenance({ name, unit, every }) {
+/** The printer the Upkeep tab is showing ('' = main). Falls back to the main printer if that one was removed. */
+let upkeepPrinter = '';
+export function currentPrinter() {
+    return printerIds().includes(upkeepPrinter) ? upkeepPrinter : '';
+}
+export function setUpkeepPrinter(id) {
+    upkeepPrinter = printerIds().includes(id) ? id : '';
+}
+
+export function addMaintenance({ name, unit, every, printerId = currentPrinter() }) {
     const cleanName = cleanText(name, 60);
     const amount = Number(every);
     if (cleanName === '') return 'Give the task a name.';
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1000000) return 'Enter how often it is due, above 0.';
     if (!Object.prototype.hasOwnProperty.call(UNIT_LABELS, unit)) return 'Pick print hours, days, prints or spools.';
-    const stats = calcStats();
+    const stats = printerStats(printerId);
     state.maintenance[uid()] = {
         name: cleanName, unit, every: amount,
-        lastDate: todayLocal(), atHours: stats.minutes / 60, atPrints: stats.total, atGrams: stats.grams
+        lastDate: todayLocal(), atHours: stats.minutes / 60, atPrints: stats.total, atGrams: stats.grams,
+        printerId
     };
     saveState();
     renderAll();
@@ -71,7 +81,7 @@ export function renderPresetList() {
     presetListEl.replaceChildren();
     if (!set) return;
 
-    const have = new Set(Object.values(state.maintenance).map((t) => t.name.toLowerCase()));
+    const have = new Set(Object.values(state.maintenance).filter((t) => (t.printerId || '') === currentPrinter()).map((t) => t.name.toLowerCase()));
     const list = h('div', 'preset-items');
     set.items.forEach((item, i) => {
         const row = h('label', 'preset-item');
@@ -106,14 +116,16 @@ export function renderPresetList() {
     add.type = 'button';
     add.id = 'maint-set-add';
     add.addEventListener('click', () => {
-        const stats = calcStats();
+        const printerId = currentPrinter();
+        const stats = printerStats(printerId);
         let count = 0;
         presetListEl.querySelectorAll('.preset-check').forEach((box) => {
             if (!box.checked || box.disabled) return;
             const item = set.items[Number(box.dataset.index)];
             state.maintenance[uid()] = {
                 name: item.name, unit: item.unit, every: item.every,
-                lastDate: todayLocal(), atHours: stats.minutes / 60, atPrints: stats.total, atGrams: stats.grams
+                lastDate: todayLocal(), atHours: stats.minutes / 60, atPrints: stats.total, atGrams: stats.grams,
+                printerId
             };
             count++;
         });
@@ -225,7 +237,7 @@ export function buildMaintenanceCard() {
     presetError.hidden = true;
     const savePreset = () => {
         const label = cleanText(presetName.value, 40);
-        const tasks = Object.values(state.maintenance).map((t) => ({ name: t.name, unit: t.unit, every: t.every }));
+        const tasks = Object.values(state.maintenance).filter((t) => (t.printerId || '') === currentPrinter()).map((t) => ({ name: t.name, unit: t.unit, every: t.every }));
         if (label === '') return showError(presetError, 'Give the preset a name.');
         if (tasks.length === 0) return showError(presetError, 'Add at least one task first.');
         if (Object.keys(state.settings.customPresets).length >= 20) return showError(presetError, 'You can keep up to 20 presets.');
@@ -248,13 +260,14 @@ export function buildMaintenanceCard() {
 }
 
 export function renderUpkeep() {
+    renderPrinterPicker();
     renderHours();
     renderParts();
     renderDrying();
     if (!maintenanceListEl) return;
     renderPresetList();
     maintenanceListEl.replaceChildren();
-    const list = maintenanceStatus(calcStats());
+    const list = maintenanceStatus(calcStats(), hasManyPrinters() ? currentPrinter() : null);
     if (list.length === 0) {
         maintenanceListEl.appendChild(emptyState_('No upkeep tasks yet.', 'Add one below, or pick a quick add.'));
         return;
@@ -269,12 +282,12 @@ let hoursEl = null;
 let partsListEl = null;
 let partsSummaryEl = null;
 
-export function totalPrintHours() {
-    return calcStats().minutes / 60;
+export function totalPrintHours(printerId = '') {
+    return printerStats(printerId).minutes / 60;
 }
 
 /** Hours printed since this part was last swapped. */
-export function partUsage(part, hoursNow = totalPrintHours()) {
+export function partUsage(part, hoursNow = totalPrintHours(part.printerId || '')) {
     return Math.max(0, hoursNow - part.atHours);
 }
 
@@ -283,22 +296,22 @@ export function partRate(part) {
     return Number.isFinite(part.price) && Number.isFinite(part.lifespan) && part.lifespan > 0 ? part.price / part.lifespan : null;
 }
 
-export function partsWearRate() {
-    return Object.values(state.parts).reduce((sum, p) => sum + (partRate(p) || 0), 0);
+export function partsWearRate(printerId = '') {
+    return Object.values(state.parts).filter((p) => (p.printerId || '') === printerId).reduce((sum, p) => sum + (partRate(p) || 0), 0);
 }
 
-export function addPart({ name, lifespan, price }) {
+export function addPart({ name, lifespan, price, printerId = currentPrinter() }) {
     const cleanName = cleanText(name, 40);
     if (cleanName === '') return 'Give the part a name.';
-    if (Object.values(state.parts).some((p) => p.name.toLowerCase() === cleanName.toLowerCase())) return 'You already track a part with that name.';
+    if (Object.values(state.parts).some((p) => (p.printerId || '') === printerId && p.name.toLowerCase() === cleanName.toLowerCase())) return 'You already track a part with that name.';
     if (Object.keys(state.parts).length >= 30) return 'You can track up to 30 parts.';
     const life = Number.isFinite(lifespan) ? lifespan : null;
     const cost = Number.isFinite(price) ? price : null;
     if (life !== null && life <= 0) return 'Lifespan must be above 0 hours, or left empty.';
     if (cost !== null && cost < 0) return 'Price must be 0 or more, or left empty.';
     state.parts[uid()] = {
-        name: cleanName, lastDate: todayLocal(), atHours: totalPrintHours(),
-        lifespan: life, price: cost && cost > 0 ? cost : null
+        name: cleanName, lastDate: todayLocal(), atHours: totalPrintHours(printerId),
+        lifespan: life, price: cost && cost > 0 ? cost : null, printerId
     };
     saveState();
     renderAll();
@@ -310,7 +323,7 @@ export function swapPart(id) {
     if (!part) return;
     const before = { ...part };
     part.lastDate = todayLocal();
-    part.atHours = totalPrintHours();
+    part.atHours = totalPrintHours(part.printerId || '');
     saveState();
     renderAll();
     notify(`Logged: ${part.name} swapped today.`, {
@@ -352,12 +365,14 @@ function hoursStat(label, value, sub) {
 export function renderHours() {
     if (!hoursEl) return;
     hoursEl.replaceChildren();
-    const all = calcStats();
-    const month = calcStats('month');
+    const pid = currentPrinter();
+    const many = hasManyPrinters();
+    const all = printerStats(pid);
+    const month = many ? calcStats('month', pid) : calcStats('month');
     hoursEl.appendChild(hoursStat('Print hours', fmtDuration(all.minutes) || '0h',
         all.timedPrints === 0 ? 'Log print times to track hours' : `from ${all.timedPrints} of ${all.total} prints with a time`));
     hoursEl.appendChild(hoursStat('This month', fmtDuration(month.minutes) || '0h', `${month.total} ${month.total === 1 ? 'print' : 'prints'}`));
-    const overdue = maintenanceStatus(all).filter((m) => m.due).length;
+    const overdue = maintenanceStatus(all, many ? pid : null).filter((m) => m.due).length;
     hoursEl.appendChild(hoursStat('Reminders due', String(overdue), overdue === 0 ? 'All caught up' : 'See the list below'));
 }
 
@@ -445,11 +460,12 @@ function buildPartRow(id, part, hoursNow) {
 export function renderParts() {
     if (!partsListEl) return;
     partsListEl.replaceChildren();
-    const entries = Object.entries(state.parts);
+    const pid = currentPrinter();
+    const entries = Object.entries(state.parts).filter(([, p]) => (p.printerId || '') === pid);
     if (entries.length === 0) {
         partsListEl.appendChild(h('p', 'secondary-text small', 'No parts tracked yet. Add your nozzle and build plate below.'));
     }
-    const hoursNow = totalPrintHours();
+    const hoursNow = totalPrintHours(pid);
     for (const [id, part] of entries) partsListEl.appendChild(buildPartRow(id, part, hoursNow));
 
     for (const [key, name] of [['nozzle', 'Nozzle'], ['plate', 'Build plate']]) {
@@ -457,10 +473,10 @@ export function renderParts() {
         if (quick) quick.hidden = entries.some(([, p]) => p.name.toLowerCase() === name.toLowerCase());
     }
 
-    const rate = partsWearRate();
+    const rate = partsWearRate(pid);
     partsSummaryEl.replaceChildren();
     if (rate > 0) {
-        const wear = state.settings.printer.wear;
+        const wear = (pid === '' ? state.settings.printer : state.settings.printers[pid]).wear;
         partsSummaryEl.appendChild(h('p', 'setting-hint', `With the prices and lifespans you entered, parts wear out at about ${fmtMoney(rate, 3)} per print hour.` +
             (wear > 0 ? ` Your wear rate in Settings is ${fmtMoney(wear, 3)}.` : '')));
         if (Math.abs((wear || 0) - rate) > 0.00005) {
@@ -468,7 +484,7 @@ export function renderParts() {
             use.type = 'button';
             use.id = 'use-wear-rate';
             use.addEventListener('click', () => {
-                commitSettings((st) => { st.printer.wear = Math.round(rate * 10000) / 10000; });
+                commitSettings((st) => { (pid === '' ? st.printer : st.printers[pid]).wear = Math.round(rate * 10000) / 10000; });
                 notify('Wear rate updated. It is now added to each print\'s cost.');
             });
             partsSummaryEl.appendChild(use);
@@ -536,12 +552,39 @@ function buildPartsCard() {
     return card;
 }
 
+let pickerEl = null;
+let pickerSelect = null;
+
+/** "Printer: [select]" row, shown only when there is more than one printer. */
+function renderPrinterPicker() {
+    if (!pickerEl) return;
+    const ids = printerIds();
+    pickerEl.hidden = ids.length < 2;
+    if (ids.length < 2) { upkeepPrinter = ''; return; }
+    const keep = currentPrinter();
+    pickerSelect.replaceChildren();
+    ids.forEach((id, i) => {
+        const o = h('option', 'option-input', `${i + 1}. ${printerName(id)}`);
+        o.value = id;
+        pickerSelect.appendChild(o);
+    });
+    pickerSelect.value = keep;
+}
+
 /** Build the Upkeep tab: hours, wear parts, then the reminder list. */
 export function buildUpkeepTab() {
     const root = $('upkeep-content');
+    pickerEl = h('div', 'range-bar printer-pick');
+    pickerEl.id = 'upkeep-printer-bar';
+    const pickLabel = h('label', null, 'Printer');
+    pickLabel.htmlFor = 'upkeep-printer';
+    pickerSelect = h('select', 'dropdown');
+    pickerSelect.id = 'upkeep-printer';
+    pickerSelect.addEventListener('change', () => { upkeepPrinter = pickerSelect.value; renderUpkeep(); });
+    pickerEl.append(pickLabel, pickerSelect, h('p', 'range-note', 'Hours, wear parts and reminders are counted for each printer on its own.'));
     hoursEl = h('div', 'stat-grid hours-grid');
     hoursEl.id = 'hours-panel';
-    root.append(hoursEl, buildPartsCard(), buildDryingCard(), buildMaintenanceCard());
+    root.append(pickerEl, hoursEl, buildPartsCard(), buildDryingCard(), buildMaintenanceCard());
     renderUpkeep();
 }
 

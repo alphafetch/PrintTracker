@@ -1,6 +1,6 @@
 import { AMS_TYPES, BRANDS, brandOfLegacyModel, findPrinter } from './catalog.js';
-import { ACCENTS, BACKGROUNDS, CORRUPT_KEY, CURRENCIES, DATE_FORMATS, ANALYSIS_GROUPS, FAIL_REASONS, RANGES, KNOWN_MATERIALS, NOZZLES, SCHEMA_VERSION, SETTINGS_VERSION, STORAGE_KEY, UNIT_LABELS } from './constants.js';
-import { clampNum, cleanText, isObject, isSafeId, isValidDate, notify, todayLocal } from './util.js';
+import { ACCENTS, BACKGROUNDS, CORRUPT_KEY, CURRENCIES, DATE_FORMATS, ANALYSIS_GROUPS, FAIL_REASONS, RANGES, KNOWN_MATERIALS, MAX_EXTRA_PRINTERS, NOZZLES, SCHEMA_VERSION, SETTINGS_VERSION, STORAGE_KEY, UNIT_LABELS } from './constants.js';
+import { clampNum, cleanText, isObject, isSafeId, isValidDate, notify, todayLocal, validMinutes } from './util.js';
 
 // ---------- State and storage ----------
 
@@ -21,23 +21,17 @@ export function defaultSettings() {
         shortcuts: true,
         settingsVersion: SETTINGS_VERSION,
         customPresets: {},
+        // more printers: { id: same fields as `printer` }. The `printer` below is the main one.
+        printers: {},
         // watts, kwhPrice and price: null means "use the automatic value", a number is the person's own
         printer: { brand: '', model: '', nickname: '', nozzle: '0.4', date: '', price: null, watts: null, kwhPrice: null, wear: null }
     };
 }
 
-/** Turn anything (including junk from an import) into a complete, valid settings object. */
-export function cleanSettings(raw) {
-    const d = defaultSettings();
-    const s = isObject(raw) ? raw : {};
-    const p = isObject(s.printer) ? s.printer : {};
-    const legacy = !(Number(s.settingsVersion) >= SETTINGS_VERSION);
-
-    let brand = BRANDS.some((b) => b.key === p.brand) ? p.brand : brandOfLegacyModel(p.model);
-    const model = findPrinter(brand, p.model) ? p.model : '';
-    if (!brand) brand = '';
-
-    // Before version 2, 0 meant "not set". Now null means that and 0 is a real value.
+/** One printer's details. Before settings version 2, 0 meant "not set"; now null means that and 0 is a real value. */
+export function cleanPrinter(raw, legacy = false) {
+    const d = defaultSettings().printer;
+    const p = isObject(raw) ? raw : {};
     const own = (v, max, digits) => {
         if (v === null || v === undefined || v === '') return null;
         const n = Number(v);
@@ -45,6 +39,39 @@ export function cleanSettings(raw) {
         const f = Math.pow(10, digits);
         return Math.round(Math.min(n, max) * f) / f;
     };
+    let brand = BRANDS.some((b) => b.key === p.brand) ? p.brand : brandOfLegacyModel(p.model);
+    const model = findPrinter(brand, p.model) ? p.model : '';
+    if (!brand) brand = '';
+    return {
+        brand,
+        model,
+        nickname: cleanText(p.nickname, 40),
+        nozzle: NOZZLES.includes(String(p.nozzle)) ? String(p.nozzle) : d.nozzle,
+        date: isValidDate(p.date) ? p.date : '',
+        price: own(p.price, 10000000, 2),
+        watts: own(p.watts, 5000, 0),
+        kwhPrice: own(p.kwhPrice, 100, 4),
+        wear: own(p.wear, 10000, 4)
+    };
+}
+
+/** The extra printers: { id: printer }, at most MAX_EXTRA_PRINTERS. */
+export function cleanPrinters(raw) {
+    const out = {};
+    if (!isObject(raw)) return out;
+    for (const [id, p] of Object.entries(raw)) {
+        if (Object.keys(out).length >= MAX_EXTRA_PRINTERS) break;
+        if (!isSafeId(id) || !isObject(p)) continue;
+        out[id] = cleanPrinter(p);
+    }
+    return out;
+}
+
+/** Turn anything (including junk from an import) into a complete, valid settings object. */
+export function cleanSettings(raw) {
+    const d = defaultSettings();
+    const s = isObject(raw) ? raw : {};
+    const legacy = !(Number(s.settingsVersion) >= SETTINGS_VERSION);
 
     let background = BACKGROUNDS.some((b) => b.key === s.background) ? s.background : d.background;
     if (legacy && background === 'layers') background = 'blueprint';
@@ -65,17 +92,8 @@ export function cleanSettings(raw) {
         shortcuts: typeof s.shortcuts === 'boolean' ? s.shortcuts : d.shortcuts,
         settingsVersion: SETTINGS_VERSION,
         customPresets: cleanPresets(s.customPresets),
-        printer: {
-            brand,
-            model,
-            nickname: cleanText(p.nickname, 40),
-            nozzle: NOZZLES.includes(String(p.nozzle)) ? String(p.nozzle) : d.printer.nozzle,
-            date: isValidDate(p.date) ? p.date : '',
-            price: own(p.price, 10000000, 2),
-            watts: own(p.watts, 5000, 0),
-            kwhPrice: own(p.kwhPrice, 100, 4),
-            wear: own(p.wear, 10000, 4)
-        }
+        printers: cleanPrinters(s.printers),
+        printer: cleanPrinter(s.printer, legacy)
     };
 }
 
@@ -101,8 +119,13 @@ export function cleanPresets(raw) {
     return out;
 }
 
+/** A printer id that exists ('' means the main printer). */
+export function cleanPrinterId(id, printers) {
+    return typeof id === 'string' && id !== '' && isObject(printers) && Object.prototype.hasOwnProperty.call(printers, id) ? id : '';
+}
+
 /** Clean the maintenance list. Entries that cannot be repaired are dropped. */
-export function cleanMaintenance(raw) {
+export function cleanMaintenance(raw, printers = {}) {
     const out = {};
     if (!isObject(raw)) return out;
     for (const [id, t] of Object.entries(raw)) {
@@ -118,7 +141,8 @@ export function cleanMaintenance(raw) {
             lastDate: isValidDate(t.lastDate) ? t.lastDate : todayLocal(),
             atHours: clampNum(t.atHours, 0, 10000000, 0),
             atPrints: Math.round(clampNum(t.atPrints, 0, 10000000, 0)),
-            atGrams: clampNum(t.atGrams, 0, 1e10, 0)
+            atGrams: clampNum(t.atGrams, 0, 1e10, 0),
+            printerId: cleanPrinterId(t.printerId, printers)
         };
     }
     return out;
@@ -149,7 +173,7 @@ export function cleanAms(raw, spools) {
 }
 
 /** Wear parts (nozzle, build plate...): { id: { name, lastDate, atHours, lifespan|null, price|null } }. */
-export function cleanParts(raw) {
+export function cleanParts(raw, printers = {}) {
     const out = {};
     if (!isObject(raw)) return out;
     for (const [id, p] of Object.entries(raw).slice(0, 30)) {
@@ -168,7 +192,8 @@ export function cleanParts(raw) {
             lastDate: isValidDate(p.lastDate) ? p.lastDate : todayLocal(),
             atHours: clampNum(p.atHours, 0, 10000000, 0),
             lifespan: num(p.lifespan, 100000, 1),
-            price: num(p.price, 10000000, 2)
+            price: num(p.price, 10000000, 2),
+            printerId: cleanPrinterId(p.printerId, printers)
         };
     }
     return out;
@@ -196,6 +221,30 @@ export function cleanProfile(raw) {
     return Object.values(out).some((v) => v !== '') ? out : null;
 }
 
+/**
+ * What a queued item should be printed with, copied from an earlier print: { minutes, usage, profile, notes, printerId },
+ * or null when there is nothing in it.
+ */
+export function cleanQueueSpec(raw) {
+    if (!isObject(raw)) return null;
+    const usage = [];
+    for (const u of Array.isArray(raw.usage) ? raw.usage.slice(0, 12) : []) {
+        if (!isObject(u) || typeof u.spoolId !== 'string' || !isSafeId(u.spoolId)) continue;
+        const grams = Number(u.grams);
+        if (!Number.isFinite(grams) || grams <= 0 || grams > 1000000) continue;
+        if (usage.some((x) => x.spoolId === u.spoolId)) continue;
+        usage.push({ spoolId: u.spoolId, grams: Math.round(grams * 100) / 100 });
+    }
+    const spec = {
+        minutes: validMinutes(Number(raw.minutes)),
+        usage,
+        profile: cleanProfile(raw.profile),
+        notes: cleanText(raw.notes, 500),
+        printerId: typeof raw.printerId === 'string' && isSafeId(raw.printerId) ? raw.printerId : ''
+    };
+    return spec.minutes || usage.length > 0 || spec.profile || spec.notes || spec.printerId ? spec : null;
+}
+
 export function cleanFailReason(raw, result) {
     return !result && FAIL_REASONS.some(([k]) => k === raw) ? raw : '';
 }
@@ -219,19 +268,20 @@ export function emptyState() {
 
 export function normalizeState(data) {
     const s = isObject(data) ? data : {};
+    const settings = cleanSettings(s.settings);
     return {
         schemaVersion: SCHEMA_VERSION,
         prints: isObject(s.prints) ? s.prints : {},
         spools: isObject(s.spools) ? s.spools : {},
         queue: isObject(s.queue) ? s.queue : {},
-        maintenance: cleanMaintenance(s.maintenance),
-        settings: cleanSettings(s.settings),
+        maintenance: cleanMaintenance(s.maintenance, settings.printers),
+        settings,
         hideArchived: Boolean(s.hideArchived),
         theme: s.theme === 'light' || s.theme === 'dark' ? s.theme : null,
         lastExported: typeof s.lastExported === 'string' ? s.lastExported : null,
         ui: cleanUi(s.ui),
         ams: cleanAms(s.ams, isObject(s.spools) ? s.spools : {}),
-        parts: cleanParts(s.parts)
+        parts: cleanParts(s.parts, settings.printers)
     };
 }
 

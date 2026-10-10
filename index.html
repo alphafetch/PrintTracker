@@ -97,6 +97,8 @@
             </div>
             <div id="ams" class="ams-section"></div>
             <div id="spools" class="card-list spool-grid"></div>
+            <div id="shopping"></div>
+            <div id="color-twins"></div>
             <div id="spool-analysis"></div>
             <div id="material-guide"></div>
         </section>
@@ -203,6 +205,11 @@
                 </div>
             </div>
 
+            <div class="field" id="printer-field" hidden>
+                <label for="printer-select">Printer</label>
+                <select id="printer-select" class="dropdown"></select>
+            </div>
+
             <div class="field" id="fail-reason-field" hidden>
                 <label for="fail-reason-select">What went wrong? (optional)</label>
                 <select id="fail-reason-select" class="dropdown"></select>
@@ -294,6 +301,7 @@
                     </div>
                 </div>
             </div>
+            <p id="similar-hint" class="secondary-text small similar-hint" role="status" hidden></p>
 
             <div class="field-row">
                 <div class="field">

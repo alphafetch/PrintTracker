@@ -1,6 +1,6 @@
 import { buildAchievementsPanel } from './achievements.js';
 import { findMaterial } from './catalog.js';
-import { calcStats, hardwareCost, totalGramsOfPrint } from './calc.js';
+import { calcStats, describeDays, hardwareCost, spoolForecast, totalGramsOfPrint } from './calc.js';
 import { failReasonLabel, MATERIAL_COLORS, MONTHS, RANGES, Sections } from './constants.js';
 import { openPrintPopup } from './printPopup.js';
 import { emptyState_, makeBadge, plural } from './render.js';
@@ -8,7 +8,9 @@ import { openSpoolPopup } from './spoolPopup.js';
 import { saveState, state } from './state.js';
 import { showTab } from './tabs.js';
 import { $, fmtDuration, fmtGrams, fmtMoney, formatDate, h, isObject, makeLink, makeSwatch, materialKey, normalizeLink, spoolHex, svgEl, todayLocal } from './util.js';
-import { buildBackupBanner, buildPrinterPanel } from './widgets.js';
+import { buildHeatmapPanel } from './heatmap.js';
+import { openSummaryPopup } from './summary.js';
+import { buildBackupBanner, buildPrinterPanels } from './widgets.js';
 
 // ---------- Rendering: dashboard ----------
 
@@ -97,6 +99,12 @@ function buildRangeBar(range) {
         renderDashboard();
     });
     bar.append(label, select);
+    const recap = h('button', 'btn btn-outline btn-small', 'Summary');
+    recap.type = 'button';
+    recap.id = 'summary-button';
+    recap.title = 'A recap of a week or month that you can copy, print or save';
+    recap.addEventListener('click', openSummaryPopup);
+    bar.appendChild(recap);
     if (range !== 'all') {
         const note = h('p', 'range-note', 'Counts prints and filament bought in this range. Stock, upkeep and achievements always use everything.');
         note.id = 'dash-range-note';
@@ -221,7 +229,9 @@ export function renderDashboard() {
             row.addEventListener('click', () => showTab(Sections.FILA));
             panel.appendChild(row);
             if (reorder) {
-                const note = h('p', 'reorder-note', `Time to reorder: you have no other ${String(spool.material || 'other').toUpperCase()} in stock.`);
+                const fc = spoolForecast(id, spool);
+                const pace = fc && fc.daysLeft <= 365 ? ` At your pace it runs out in ${describeDays(fc.daysLeft)}.` : '';
+                const note = h('p', 'reorder-note', `Time to reorder: you have no other ${String(spool.material || 'other').toUpperCase()} in stock.${pace}`);
                 note.dataset.id = id;
                 const buy = h('button', 'btn btn-outline btn-small', 'Buy again');
                 buy.type = 'button';
@@ -255,7 +265,7 @@ export function renderDashboard() {
     }
 
     const cols = h('div', 'dash-grid');
-    cols.appendChild(buildPrinterPanel(all));
+    for (const panel of buildPrinterPanels(all)) cols.appendChild(panel);
 
     // --- Filament by material (donut) ---
     const materials = Object.entries(stats.byMaterial).filter(([, g]) => g > 0).sort((a, b) => b[1] - a[1]);
@@ -303,6 +313,9 @@ export function renderDashboard() {
         cols.appendChild(panel);
     }
 
+    const heat = buildHeatmapPanel(dashPanel);
+    if (heat) cols.appendChild(heat);
+
     if (stats.failed > 0) cols.appendChild(buildFailurePanel(stats));
     if (Object.keys(stats.spendByMonth).length > 0) cols.appendChild(buildSpendPanel(stats));
 
@@ -346,7 +359,7 @@ export function renderDashboard() {
             row.appendChild(text);
             const log = h('button', 'btn btn-outline btn-small', 'Log print');
             log.type = 'button';
-            log.addEventListener('click', () => openPrintPopup({ name: item.name, link: item.link || '', queueId: id }));
+            log.addEventListener('click', () => openPrintPopup({ name: item.name, link: item.link || '', queueId: id, spec: item.spec }));
             row.appendChild(log);
             panel.appendChild(row);
         }

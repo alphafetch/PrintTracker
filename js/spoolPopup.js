@@ -2,6 +2,7 @@ import { DEFAULT_SWATCH, KNOWN_MATERIALS } from './constants.js';
 import { updateBodyLock } from './printPopup.js';
 import { renderAll } from './render.js';
 import { saveState, state } from './state.js';
+import { similarHintText } from './colors.js';
 import { $, clearError, guessHex, isHex, isValidDate, showError, spoolHex, todayLocal, uid } from './util.js';
 
 // ---------- Spool popup ----------
@@ -22,12 +23,14 @@ let spoolReturn = null;   // what had focus before the popup opened
 export let editingSpoolId = null; // null means "add a new spool"
 let startColor = '';              // the color text the popup opened with
 let startHex = '';                // and the swatch that went with it
+let hintExclude = null;           // a spool the "similar colour" hint should ignore (the one being edited or bought again)
 let startExplicit = '';           // the opened spool's own saved swatch ('' if none)
 
 export function openSpoolPopup({ copyFromId = null, editId = null } = {}) {
     const editing = editId ? state.spools[editId] : null;
     const source = editing || (copyFromId ? state.spools[copyFromId] : null);
     editingSpoolId = editing ? editId : null;
+    hintExclude = editing ? editId : (copyFromId && state.spools[copyFromId] ? copyFromId : null);
     $('spool-popup-title').textContent = editing ? 'Edit Spool' : 'Add Spool';
     $('add-spool-button').textContent = editing ? 'Save Changes' : 'Add Spool';
 
@@ -48,11 +51,22 @@ export function openSpoolPopup({ copyFromId = null, editId = null } = {}) {
     spoolDateInput.value = editing && isValidDate(editing.date) ? editing.date : todayLocal();
     driedInput.value = editing && isValidDate(editing.driedDate) ? editing.driedDate : '';
     clearError(spoolError);
+    updateSimilarHint();
     spoolReturn = document.activeElement;
     spoolPopup.style.display = 'block';
     spoolPopup.scrollTop = 0;
     updateBodyLock();
     (source ? gramsInput : brandInput).focus();
+}
+
+/** "You already have a close colour" hint under the colour field. */
+export function updateSimilarHint() {
+    const hint = $('similar-hint');
+    const text = isHex(hexInput.value) && colorInput.value.trim() !== ''
+        ? similarHintText(hexInput.value, materialDropdown.value, hintExclude)
+        : '';
+    hint.textContent = text;
+    hint.hidden = text === '';
 }
 
 export function closeSpoolPopup() {
@@ -67,8 +81,10 @@ colorInput.addEventListener('input', () => {
     if (hexTouched) return;
     const text = colorInput.value.trim().toLowerCase();
     hexInput.value = text === startColor && startColor !== '' ? startHex : (guessHex(colorInput.value) || DEFAULT_SWATCH);
+    updateSimilarHint();
 });
-hexInput.addEventListener('input', () => { hexTouched = true; });
+hexInput.addEventListener('input', () => { hexTouched = true; updateSimilarHint(); });
+materialDropdown.addEventListener('change', updateSimilarHint);
 
 export function saveSpool() {
     const brand = brandInput.value.trim();

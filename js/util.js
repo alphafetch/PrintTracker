@@ -229,3 +229,57 @@ export function notify(message, options = false) {
 export function isSafeId(id) {
     return /^[A-Za-z0-9_-]{1,64}$/.test(id) && id !== '__proto__';
 }
+
+
+/** Copy text to the clipboard. Resolves true when it worked. */
+export async function copyText(text) {
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        }
+    } catch (error) {
+        // fall through to the older way
+    }
+    try {
+        const box = document.createElement('textarea');
+        box.value = text;
+        box.setAttribute('readonly', '');
+        box.style.position = 'fixed';
+        box.style.opacity = '0';
+        document.body.appendChild(box);
+        box.select();
+        const ok = document.execCommand('copy');
+        box.remove();
+        return ok;
+    } catch (error) {
+        return false;
+    }
+}
+
+// ---------- Colour comparison ----------
+
+/** "#rrggbb" -> CIE L*a*b* (D65), so distances match how different two colours look. */
+export function hexToLab(hex) {
+    if (!isHex(hex)) return null;
+    const lin = (v) => {
+        const c = v / 255;
+        return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    };
+    const r = lin(parseInt(hex.slice(1, 3), 16));
+    const g = lin(parseInt(hex.slice(3, 5), 16));
+    const b = lin(parseInt(hex.slice(5, 7), 16));
+    const x = (0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / 0.95047;
+    const y = 0.2126729 * r + 0.7151522 * g + 0.072175 * b;
+    const z = (0.0193339 * r + 0.119192 * g + 0.9503041 * b) / 1.08883;
+    const f = (t) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
+    return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
+}
+
+/** How different two colours look (CIE76 delta E): under ~5 is hard to tell apart, under ~12 is "similar". */
+export function colorDistance(hexA, hexB) {
+    const a = hexToLab(hexA);
+    const b = hexToLab(hexB);
+    if (!a || !b) return Infinity;
+    return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}

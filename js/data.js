@@ -1,11 +1,11 @@
-import { costOfPrint, energyCostOfPrint, totalGramsOfPrint, usageOf, wearCostOfPrint } from './calc.js';
+import { costOfPrint, energyCostOfPrint, hasManyPrinters, printerIdOf, printerName, totalGramsOfPrint, usageOf, wearCostOfPrint } from './calc.js';
 import { failReasonLabel, MAX_IMPORT_BYTES, SCHEMA_VERSION } from './constants.js';
 import { planCsvImport } from './csv.js';
 import { renderDashboard } from './dashboard.js';
 import { renderAll, safeRender } from './render.js';
 import { syncAllSettings } from './settingsKit.js';
 import { takeSnapshot } from './snapshots.js';
-import { cleanAms, cleanParts, cleanFailReason, cleanMaintenance, cleanProfile, cleanSettings, cleanUi, emptyState, normalizeState, saveState, setState, state } from './state.js';
+import { cleanAms, cleanParts, cleanFailReason, cleanMaintenance, cleanPrinterId, cleanProfile, cleanQueueSpec, cleanSettings, cleanUi, emptyState, normalizeState, saveState, setState, state } from './state.js';
 import { applyTheme } from './theme.js';
 import { $, notify, uid, cleanText, isSafeId, fmtGrams, isHex, isObject, isValidDate, normalizeLink, todayLocal, validMinutes } from './util.js';
 
@@ -62,7 +62,7 @@ export function csvCell(value) {
 
 export function buildPrintsCsv() {
     const rows = [['Date', 'Name', 'Result', 'Print time (min)', 'Filament (g)', 'Est. cost', 'Spools', 'Link', 'Notes',
-        'Failure reason', 'Profile', 'Layer height', 'Infill', 'Supports']];
+        'Failure reason', 'Profile', 'Layer height', 'Infill', 'Supports', ...(hasManyPrinters() ? ['Printer'] : [])]];
     const entries = Object.values(state.prints).filter(isObject)
         .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
     for (const p of entries) {
@@ -75,7 +75,8 @@ export function buildPrintsCsv() {
             p.date || '', p.name || '', p.result ? 'Success' : 'Failure',
             validMinutes(Number(p.minutes)) || '', fmtGrams(totalGramsOfPrint(p)),
             (costOfPrint(p) + energyCostOfPrint(p) + wearCostOfPrint(p)).toFixed(2), spoolNames, p.link || '', p.notes || '',
-            failReasonLabel(p.failReason), prof.name || '', prof.layer || '', prof.infill || '', prof.supports || ''
+            failReasonLabel(p.failReason), prof.name || '', prof.layer || '', prof.infill || '', prof.supports || '',
+            ...(hasManyPrinters() ? [printerName(printerIdOf(p))] : [])
         ]);
     }
     return rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
@@ -131,6 +132,9 @@ export function validateImport(data) {
         };
     }
 
+    const settings = data.settings === undefined ? null : cleanSettings(data.settings);
+    const printers = settings ? settings.printers : state.settings.printers;
+
     let missingRefs = 0;
     const prints = {};
     for (const [id, p] of Object.entries(data.prints)) {
@@ -155,7 +159,8 @@ export function validateImport(data) {
             minutes: validMinutes(p.minutes),
             notes: cleanText(p.notes, 500),
             failReason: cleanFailReason(p.failReason, Boolean(p.result)),
-            profile: cleanProfile(p.profile)
+            profile: cleanProfile(p.profile),
+            printerId: cleanPrinterId(p.printerId, printers)
         };
     }
 
@@ -168,6 +173,8 @@ export function validateImport(data) {
             if (name === '') return { error: `A queue item has no name (id ${id}).` };
             const link = normalizeLink(typeof q.link === 'string' ? q.link : '');
             queue[id] = { name, link: link === null ? '' : link, done: Boolean(q.done) };
+            const spec = cleanQueueSpec(q.spec);
+            if (spec) queue[id].spec = spec;
         }
     }
 
@@ -177,14 +184,14 @@ export function validateImport(data) {
             schemaVersion: SCHEMA_VERSION,
             prints, spools, queue,
             // null means "the backup did not include this", so the current value is kept
-            maintenance: data.maintenance === undefined ? null : cleanMaintenance(data.maintenance),
-            settings: data.settings === undefined ? null : cleanSettings(data.settings),
+            maintenance: data.maintenance === undefined ? null : cleanMaintenance(data.maintenance, printers),
+            settings,
             hideArchived: Boolean(data.hideArchived),
             theme: data.theme === 'light' || data.theme === 'dark' ? data.theme : null,
             lastExported: typeof data.lastExported === 'string' ? data.lastExported : null,
             ui: cleanUi(data.ui),
             ams: cleanAms(data.ams, spools),
-            parts: cleanParts(data.parts)
+            parts: cleanParts(data.parts, printers)
         }
     };
 }

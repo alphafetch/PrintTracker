@@ -1,8 +1,8 @@
 import { amsLoadedList, amsSlotLabel } from './ams.js';
-import { activeSpools, gramsUsedOfSpool, remainingOf, usageOf } from './calc.js';
+import { activeSpools, gramsUsedOfSpool, hasManyPrinters, printerIdOf, printerIds, printerName, remainingOf, usageOf } from './calc.js';
 import { FAIL_REASONS } from './constants.js';
 import { renderAll } from './render.js';
-import { cleanFailReason, cleanProfile, saveState, state } from './state.js';
+import { cleanFailReason, cleanProfile, cleanQueueSpec, saveState, state } from './state.js';
 import { $, clearError, fmtGrams, h, isObject, isValidDate, makeSwatch, normalizeLink, notify, showError, spoolHex, todayLocal, uid, validMinutes } from './util.js';
 
 // ---------- Print popup (create and edit) ----------
@@ -19,6 +19,8 @@ export const resultSuccess = $('result-rinput1');
 export const resultFailure = $('result-rinput2');
 export const failField = $('fail-reason-field');
 export const failSelect = $('fail-reason-select');
+export const printerField = $('printer-field');
+export const printerSelect = $('printer-select');
 export const profileInputs = {
     name: $('profile-name-tinput'),
     layer: $('profile-layer-tinput'),
@@ -57,9 +59,10 @@ export function updateBodyLock() {
  *   printId     edit this print
  *   copyFromId  start a new print pre-filled from an existing one ("Print again")
  *   name, link  pre-fill for a new print (used by the queue)
+ *   spec        more pre-fill from a queue item (print time, spools, profile, notes, printer)
  *   queueId     queue item to tick off after saving
  */
-export function openPrintPopup({ printId = null, copyFromId = null, name = '', link = '', queueId = null } = {}) {
+export function openPrintPopup({ printId = null, copyFromId = null, name = '', link = '', queueId = null, spec = null } = {}) {
     if (!printId && activeSpools().length === 0) {
         notify('Add a filament spool first (Filament tab).', true);
         return;
@@ -68,7 +71,8 @@ export function openPrintPopup({ printId = null, copyFromId = null, name = '', l
     editingPrintId = printId;
     pendingQueueId = queueId;
     const print = printId ? state.prints[printId] : null;
-    const source = print || (copyFromId ? state.prints[copyFromId] : null);
+    const queued = !print && !copyFromId ? cleanQueueSpec(spec) : null;
+    const source = print || (copyFromId ? state.prints[copyFromId] : null) || (queued ? { ...queued, name, link } : null);
 
     printPopupTitle.textContent = print ? 'Edit Print' : 'Create Print';
     savePrintButton.textContent = print ? 'Save Changes' : 'Create Print';
@@ -100,6 +104,7 @@ export function openPrintPopup({ printId = null, copyFromId = null, name = '', l
         addFilamentRow();
     }
 
+    fillPrinterSelect(print ? printerIdOf(print) : (source && source.printerId !== undefined ? printerIdOf(source) : lastPrinterId()));
     renderAmsQuick();
     clearError(printError);
     printReturn = document.activeElement;
@@ -107,6 +112,27 @@ export function openPrintPopup({ printId = null, copyFromId = null, name = '', l
     printPopup.scrollTop = 0;
     updateBodyLock();
     nameInput.focus();
+}
+
+/** The printer of the newest print, which is usually the one you are about to use again. */
+export function lastPrinterId() {
+    let best = null;
+    for (const p of Object.values(state.prints)) {
+        if (isObject(p) && (best === null || String(p.date || '') >= String(best.date || ''))) best = p;
+    }
+    return best ? printerIdOf(best) : '';
+}
+
+/** The printer picker only appears once there is more than one printer. */
+export function fillPrinterSelect(selectedId) {
+    printerField.hidden = !hasManyPrinters();
+    printerSelect.replaceChildren();
+    printerIds().forEach((id, i) => {
+        const o = h('option', 'option-input', `${i + 1}. ${printerName(id)}`);
+        o.value = id;
+        printerSelect.appendChild(o);
+    });
+    printerSelect.value = printerIds().includes(selectedId) ? selectedId : '';
 }
 
 export function closePrintPopup() {
@@ -292,7 +318,8 @@ export function savePrint() {
         profile: cleanProfile({
             name: profileInputs.name.value, layer: profileInputs.layer.value,
             infill: profileInputs.infill.value, supports: profileInputs.supports.value
-        })
+        }),
+        printerId: hasManyPrinters() && printerIds().includes(printerSelect.value) ? printerSelect.value : ''
     };
     if (editingPrintId && state.prints[editingPrintId]) {
         state.prints[editingPrintId] = record;

@@ -1,7 +1,8 @@
+import { printerName, hasManyPrinters } from './calc.js';
 import { openPrintPopup } from './printPopup.js';
 import { emptyState_, renderAll } from './render.js';
-import { saveState, state } from './state.js';
-import { $, clearError, h, isObject, linkLabel, makeLink, normalizeLink, notify, showError, uid } from './util.js';
+import { cleanQueueSpec, saveState, state } from './state.js';
+import { $, clearError, fmtDuration, fmtGrams, h, isObject, linkLabel, makeLink, normalizeLink, notify, showError, uid } from './util.js';
 
 // ---------- Queue ----------
 
@@ -23,6 +24,20 @@ export function addQueueItem() {
     renderAll();
     queueNameInput.focus();
     return true;
+}
+
+/** "1h 30m, 45g, Bambu Lab Black, 0.20mm Standard": what a queued item will be printed with. */
+export function specSummary(spec) {
+    const bits = [];
+    const dur = fmtDuration(spec.minutes);
+    if (dur) bits.push(dur);
+    const grams = spec.usage.reduce((sum, u) => sum + u.grams, 0);
+    if (grams > 0) bits.push(`${fmtGrams(grams)}g`);
+    const spools = spec.usage.map((u) => state.spools[u.spoolId]).filter(isObject).map((s) => `${s.brand} ${s.color}`);
+    if (spools.length > 0) bits.push(spools.join(' + '));
+    if (spec.profile && spec.profile.name) bits.push(spec.profile.name);
+    if (spec.printerId && hasManyPrinters() && state.settings.printers[spec.printerId]) bits.push(printerName(spec.printerId));
+    return bits.join(' \u00B7 ');
 }
 
 export function renderQueue() {
@@ -65,13 +80,20 @@ export function renderQueue() {
             name.append(' ');
             name.appendChild(makeLink(safeLink, `(${linkLabel(safeLink)})`));
         }
+        const spec = cleanQueueSpec(item.spec);
+        const summary = spec ? specSummary(spec) : '';
+        if (summary) {
+            const sub = h('span', 'queue-spec', `Same as before: ${summary}`);
+            name.append(' ');
+            name.appendChild(sub);
+        }
         row.appendChild(name);
 
         if (!item.done) {
             const log = h('button', 'btn btn-outline btn-small', 'Log print');
             log.type = 'button';
             log.addEventListener('click', () => {
-                openPrintPopup({ name: item.name, link: item.link || '', queueId: id });
+                openPrintPopup({ name: item.name, link: item.link || '', queueId: id, spec: item.spec });
             });
             row.appendChild(log);
         }

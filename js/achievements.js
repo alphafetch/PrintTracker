@@ -115,7 +115,8 @@ export function achievementList(stats) {
         g('Printer and AMS', 'Multicolor Menace', 'Add an AMS', amsUnits.length >= 1),
         g('Printer and AMS', 'Full House', 'Fill every slot of a 4-slot AMS', amsFull),
         g('Printer and AMS', 'Spool Hotel, No Vacancy', 'Have 8 spools loaded in AMS slots', amsLoaded >= 8, p(amsLoaded, 8, 'spools')),
-        g('Printer and AMS', 'Know Thy Watts', 'Know your printer\'s power draw', Boolean(effectiveWatts()))
+        g('Printer and AMS', 'Know Thy Watts', 'Know your printer\'s power draw', Boolean(effectiveWatts())),
+        g('Printer and AMS', 'Print Farm', 'Add a second printer', Object.keys(state.settings.printers).length >= 1)
     ];
 }
 

@@ -2,7 +2,7 @@
 
 A personal 3D print and filament tracker for Bambu Lab, FlashForge and ELEGOO printers. Plain HTML, CSS and JavaScript (ES modules), no build step, no dependencies. Data lives in your browser's localStorage and can be exported/imported as JSON.
 
-> **Vibe-coded disclaimer:** this whole project was written by an AI (Claude) from plain-English requests, with me steering and testing it. It is a hobby tool, not professionally engineered software. Costs, power figures and upkeep intervals are estimates, and the code may have bugs. Export a backup regularly, and double-check any numbers.
+> **Vibe-coded disclaimer:** this whole project was written by an AI (Claude) from plain-English requests, with me steering and testing it. It is a hobby tool, not professionally engineered software. Costs, power figures and upkeep intervals are estimates, and the code may have bugs. Export a backup regularly, and double-check any number you rely on.
 
 ## Features
 
@@ -20,9 +20,16 @@ A personal 3D print and filament tracker for Bambu Lab, FlashForge and ELEGOO pr
 - **Cost analysis:** on the Filament tab, grouped by brand and material, material, brand or spool: money spent, price per kg, grams used and failed, and the "true cost per kg" once failed prints are counted.
 - **Spool labels:** print a sheet of labels (colour swatch, brand, material, weight, date, price) in two sizes. No QR code, because the app is local-only.
 - **Material guide:** typical nozzle and bed temperatures and drying settings for PLA, PETG, ABS, ASA and TPU, from Bambu Lab's wiki.
+- **Add to queue:** every print card has an "Add to queue" button. The queued item remembers the filament, print time, profile and notes, and "Log print" fills them in again.
+- **Run-out forecast:** each spool shows when it should run out at your pace over the last 60 days (at least a week of data is assumed, so a brand-new spool does not give wild numbers). The reorder note on the dashboard uses it too.
+- **Shopping list:** on the Filament tab: low spools, spools that run out within 3 weeks, and colours used in 2+ prints in the last 90 days with none left. Buy again, or copy the list as text.
+- **Similar colours:** the spool popup warns when you already own a close colour in the same material, and the Filament tab lists near-duplicates in stock (CIE76 colour distance).
+- **Print summary:** a recap of the last 7 or 30 days, this or last month, or this year. Copy it, save it as text, or print it.
+- **Print calendar:** a year of squares on the dashboard (one per day, darker with more prints) with weekly streaks.
+- **More than one printer:** Settings > Printer can add up to 5 more printers. Each has its own details, electricity, wear, hours, wear parts and reminders; every print records which printer made it (the picker only appears once you have two). AMS units stay shared. Removing a printer moves its prints to the main one and deletes its parts and reminders (Undo restores them).
 - **Undo and snapshots:** deleting a spool, archiving, clearing the queue, deleting all data and resetting settings can all be undone from the toast. The last 5 versions of your data are also kept in this browser (daily, and before an import or delete-all) and can be restored from the Data tab. They are not a real backup.
 - **Accessibility:** skip link, keyboard navigation for tabs and popups, focus returns after popups close, visible focus, and text contrast of at least 4.5:1 in both themes and every accent.
-- **Achievements:** 43 of them in seven groups, with progress bars and silly names.
+- **Achievements:** 44 of them in seven groups, with progress bars and silly names.
 - **Data:** export/import JSON (validated, confirms before replacing), export prints as CSV, **import prints from a CSV** (adds only; skips duplicates; reads this app's own CSV plus common column names), delete all data.
 - **Settings:**
   - *Printer:* brand and model (Bambu Lab, FlashForge, ELEGOO, other), nickname, nozzle, arrival date. Average power, electricity price, price paid and AMS prices are filled in automatically when a source exists, each with a pencil button to override it. Also machine wear and the total cost of the setup.
@@ -42,7 +49,7 @@ A personal 3D print and filament tracker for Bambu Lab, FlashForge and ELEGOO pr
 
 `1`-`7` switch tabs, `N` new print, `S` add a spool, `/` search prints, `T` toggle theme, `?` shortcut list. Turn off in Settings.
 
-## Running it locally
+## Running it
 
 Open it through a local server (ES modules do not work from `file://`):
 
@@ -51,8 +58,6 @@ python -m http.server 8000
 ```
 
 Then visit http://localhost:8000.
-
-Or, use the GitHub pages link on the right sidebar.
 
 ## Project structure
 
@@ -74,6 +79,7 @@ js/data.js  js/csv.js   export, import, CSV
 js/settings.js  js/settingsKit.js  js/settingsPrinter.js  js/settingsAppearance.js  js/settingsPrefs.js
 js/upkeep.js      Upkeep tab: hours, wear parts, drying, reminders
 js/analysis.js  js/labels.js  js/materials.js
+js/shopping.js  js/colors.js  js/summary.js  js/heatmap.js   shopping list, colour matching, recap, calendar
 js/snapshots.js  js/snapshotPanel.js
 js/popups.js
 ```

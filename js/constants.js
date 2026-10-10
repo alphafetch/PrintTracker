@@ -4,6 +4,7 @@
 
 export const STORAGE_KEY = 'printTracker';
 export const CORRUPT_KEY = 'printTracker.corrupt';
+export const MAX_EXTRA_PRINTERS = 5;   // besides the main printer
 export const SNAPSHOT_KEY = 'printTracker.snapshots';
 export const MAX_SNAPSHOTS = 5;
 export const SCHEMA_VERSION = 1;
