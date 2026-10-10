@@ -35,7 +35,7 @@ export function similarPairs(within = SIMILAR) {
     return pairs.sort((x, y) => x.distance - y.distance);
 }
 
-const label = (s) => `${s.brand} ${s.color}`;
+const label = (s) => `${s.brand}, ${s.color}`;
 
 /** The hint under the colour field in the spool popup. */
 export function similarHintText(hex, material, excludeId) {

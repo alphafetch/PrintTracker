@@ -5,7 +5,7 @@ import { renderDashboard } from './dashboard.js';
 import { renderAll, safeRender } from './render.js';
 import { syncAllSettings } from './settingsKit.js';
 import { takeSnapshot } from './snapshots.js';
-import { cleanAms, cleanParts, cleanFailReason, cleanMaintenance, cleanPrinterId, cleanProfile, cleanQueueSpec, cleanTags, cleanSettings, cleanUi, emptyState, normalizeState, saveState, setState, state } from './state.js';
+import { cleanAms, cleanParts, cleanRunning, cleanFailReason, cleanMaintenance, cleanPrinterId, cleanProfile, cleanQueueSpec, cleanTags, cleanSettings, cleanUi, emptyState, normalizeState, saveState, setState, state } from './state.js';
 import { applyTheme } from './theme.js';
 import { $, notify, uid, cleanText, isSafeId, fmtGrams, isHex, isObject, isValidDate, normalizeLink, todayLocal, validMinutes } from './util.js';
 
@@ -60,8 +60,8 @@ export function csvCell(value) {
     return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
 }
 
-export function buildPrintsCsv() {
-    const entries = Object.values(state.prints).filter(isObject)
+export function buildPrintsCsv(only = null) {
+    const entries = Object.entries(state.prints).filter(([id, p]) => isObject(p) && (!only || only.has(id))).map(([, p]) => p)
         .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
     const anyTags = entries.some((p) => tagsOf(p).length > 0);
     const rows = [['Date', 'Name', 'Result', 'Print time (min)', 'Filament (g)', 'Est. cost', 'Spools', 'Link', 'Notes',
@@ -132,6 +132,11 @@ export function validateImport(data) {
             driedDate: isValidDate(s.driedDate) ? s.driedDate : '',
             archived: Boolean(s.archived)
         };
+        const place = cleanText(s.location, 40);
+        if (place) spools[id].location = place;
+        if (typeof s.adjust === 'number' && Number.isFinite(s.adjust) && Math.abs(s.adjust) <= 100000) spools[id].adjust = s.adjust;
+        if (typeof s.emptyGrams === 'number' && s.emptyGrams > 0 && s.emptyGrams <= 5000) spools[id].emptyGrams = s.emptyGrams;
+        if (isValidDate(s.weighedDate)) spools[id].weighedDate = s.weighedDate;
     }
 
     const settings = data.settings === undefined ? null : cleanSettings(data.settings);
@@ -192,9 +197,10 @@ export function validateImport(data) {
             hideArchived: Boolean(data.hideArchived),
             theme: data.theme === 'light' || data.theme === 'dark' ? data.theme : null,
             lastExported: typeof data.lastExported === 'string' ? data.lastExported : null,
-            ui: cleanUi(data.ui),
+            ui: cleanUi(data.ui, Object.keys(prints).length > 0),
             ams: cleanAms(data.ams, spools),
-            parts: cleanParts(data.parts, printers)
+            parts: cleanParts(data.parts, printers),
+            running: cleanRunning(data.running, printers)
         }
     };
 }

@@ -1,5 +1,6 @@
 import { printerName, hasManyPrinters } from './calc.js';
 import { openPrintPopup } from './printPopup.js';
+import { openStartPopup } from './running.js';
 import { emptyState_, renderAll } from './render.js';
 import { cleanQueueSpec, saveState, state } from './state.js';
 import { $, clearError, fmtDuration, fmtGrams, h, isObject, linkLabel, makeLink, normalizeLink, notify, showError, uid } from './util.js';
@@ -33,7 +34,7 @@ export function specSummary(spec) {
     if (dur) bits.push(dur);
     const grams = spec.usage.reduce((sum, u) => sum + u.grams, 0);
     if (grams > 0) bits.push(`${fmtGrams(grams)}g`);
-    const spools = spec.usage.map((u) => state.spools[u.spoolId]).filter(isObject).map((s) => `${s.brand} ${s.color}`);
+    const spools = spec.usage.map((u) => state.spools[u.spoolId]).filter(isObject).map((s) => `${s.brand}, ${s.color}`);
     if (spools.length > 0) bits.push(spools.join(' + '));
     if (spec.profile && spec.profile.name) bits.push(spec.profile.name);
     if (spec.printerId && hasManyPrinters() && state.settings.printers[spec.printerId]) bits.push(printerName(spec.printerId));
@@ -90,6 +91,11 @@ export function renderQueue() {
         row.appendChild(name);
 
         if (!item.done) {
+            const start = h('button', 'btn btn-outline btn-small', 'Start');
+            start.type = 'button';
+            start.title = 'Start a timer for this print';
+            start.addEventListener('click', () => openStartPopup({ name: item.name, link: item.link || '', queueId: id, spec: item.spec }));
+            row.appendChild(start);
             const log = h('button', 'btn btn-outline btn-small', 'Log print');
             log.type = 'button';
             log.addEventListener('click', () => {

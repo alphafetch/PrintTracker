@@ -3,6 +3,7 @@ import { SHORTCUTS } from './popups.js';
 import { renderAll } from './render.js';
 import { defaultSettings, saveState, state } from './state.js';
 import { applyTheme } from './theme.js';
+import { showGuideAgain } from './guide.js';
 import { h, notify } from './util.js';
 
 import { syncAllSettings, commitSettings, settingRow, settingCard, selectField, numberField, toggleField } from './settingsKit.js';
@@ -48,6 +49,17 @@ export function buildPreferenceSettings(root) {
     }
     safety.appendChild(keys);
     root.appendChild(safety);
+
+    const help = settingCard('Help');
+    const guideButton = h('button', 'btn btn-outline', 'Show the getting-started guide');
+    guideButton.type = 'button';
+    guideButton.id = 'show-guide-button';
+    guideButton.addEventListener('click', () => {
+        showGuideAgain();
+        notify('The guide is back on the dashboard.');
+    });
+    help.appendChild(settingRow('show-guide-button', 'Getting started', 'A short checklist at the top of the dashboard for setting up the app.', guideButton));
+    root.appendChild(help);
 
     const reset = h('div', 'data-actions');
     const resetButton = h('button', 'btn btn-outline', 'Reset settings to defaults');

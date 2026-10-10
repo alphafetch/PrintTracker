@@ -1,6 +1,6 @@
 import { AMS_TYPES, BRANDS, brandOfLegacyModel, findPrinter } from './catalog.js';
 import { ACCENTS, BACKGROUNDS, CORRUPT_KEY, CURRENCIES, DATE_FORMATS, ANALYSIS_GROUPS, FAIL_REASONS, RANGES, KNOWN_MATERIALS, MAX_EXTRA_PRINTERS, NOZZLES, SCHEMA_VERSION, SETTINGS_VERSION, STORAGE_KEY, UNIT_LABELS } from './constants.js';
-import { clampNum, cleanText, isObject, isSafeId, isValidDate, notify, todayLocal, validMinutes } from './util.js';
+import { clampNum, cleanText, isObject, isSafeId, isValidDate, normalizeLink, notify, todayLocal, validMinutes } from './util.js';
 
 // ---------- State and storage ----------
 
@@ -199,13 +199,15 @@ export function cleanParts(raw, printers = {}) {
     return out;
 }
 
-export function cleanUi(raw) {
+export function cleanUi(raw, hasData = false) {
     const u = isObject(raw) ? raw : {};
     const when = typeof u.backupDismissedAt === 'string' ? new Date(u.backupDismissedAt) : null;
     return {
         backupDismissedAt: when && !Number.isNaN(when.getTime()) ? when.toISOString() : null,
         range: RANGES.some(([k]) => k === u.range) ? u.range : 'all',
-        analysisGroup: ANALYSIS_GROUPS.some(([k]) => k === u.analysisGroup) ? u.analysisGroup : 'brand-material'
+        analysisGroup: ANALYSIS_GROUPS.some(([k]) => k === u.analysisGroup) ? u.analysisGroup : 'brand-material',
+        // Someone with data already does not need the getting-started guide unless they ask for it.
+        guideDismissed: typeof u.guideDismissed === 'boolean' ? u.guideDismissed : hasData
     };
 }
 
@@ -266,6 +268,37 @@ export function cleanQueueSpec(raw) {
     return spec.minutes || usage.length > 0 || spec.profile || spec.notes || spec.tags.length > 0 || spec.printerId ? spec : null;
 }
 
+/** Most prints that can be timed at once. */
+export const MAX_RUNNING = 6;
+
+/**
+ * Prints that are running right now: { id: { name, startedAt (ms), minutes (estimate or null), printerId, link, queueId, spec } }.
+ * Anything malformed is dropped, so a hand-edited backup cannot break the dashboard.
+ */
+export function cleanRunning(raw, printers) {
+    const out = {};
+    if (!isObject(raw)) return out;
+    const now = Date.now();
+    for (const [id, r] of Object.entries(raw)) {
+        if (Object.keys(out).length >= MAX_RUNNING) break;
+        if (!isSafeId(id) || !isObject(r)) continue;
+        const name = cleanText(r.name, 80);
+        const startedAt = Number(r.startedAt);
+        if (name === '' || !Number.isFinite(startedAt) || startedAt < 946684800000 || startedAt > now + 86400000) continue;
+        const link = normalizeLink(typeof r.link === 'string' ? r.link : '');
+        out[id] = {
+            name,
+            startedAt: Math.floor(startedAt),
+            minutes: validMinutes(Number(r.minutes)),
+            printerId: cleanPrinterId(r.printerId, printers),
+            link: link === null ? '' : link,
+            queueId: typeof r.queueId === 'string' && isSafeId(r.queueId) ? r.queueId : '',
+            spec: cleanQueueSpec(r.spec)
+        };
+    }
+    return out;
+}
+
 export function cleanFailReason(raw, result) {
     return !result && FAIL_REASONS.some(([k]) => k === raw) ? raw : '';
 }
@@ -281,9 +314,10 @@ export function emptyState() {
         hideArchived: false,
         theme: null,
         lastExported: null,
-        ui: { backupDismissedAt: null, range: 'all', analysisGroup: 'brand-material' },
+        ui: { backupDismissedAt: null, range: 'all', analysisGroup: 'brand-material', guideDismissed: false },
         ams: {},
-        parts: {}
+        parts: {},
+        running: {}
     };
 }
 
@@ -300,9 +334,10 @@ export function normalizeState(data) {
         hideArchived: Boolean(s.hideArchived),
         theme: s.theme === 'light' || s.theme === 'dark' ? s.theme : null,
         lastExported: typeof s.lastExported === 'string' ? s.lastExported : null,
-        ui: cleanUi(s.ui),
+        ui: cleanUi(s.ui, isObject(s.prints) && Object.keys(s.prints).length > 0),
         ams: cleanAms(s.ams, isObject(s.spools) ? s.spools : {}),
-        parts: cleanParts(s.parts, settings.printers)
+        parts: cleanParts(s.parts, settings.printers),
+        running: cleanRunning(s.running, settings.printers)
     };
 }
 

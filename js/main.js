@@ -1,6 +1,8 @@
 import { Sections } from './constants.js';
 import { setupPopups } from './popups.js';
 import { printPopup } from './printPopup.js';
+import './slicerFill.js';
+import { setupBulk } from './bulk.js';
 import { setupPrintsToolbar } from './prints.js';
 import { renderAll } from './render.js';
 import { dailySnapshot } from './snapshots.js';
@@ -25,6 +27,7 @@ document.getElementById('skip-link').addEventListener('click', (e) => {
 });
 buildHeader();
 setupPrintsToolbar();
+setupBulk();
 setupSpoolToolbar();
 buildSettings();
 buildUpkeepTab();

@@ -186,6 +186,11 @@ export function makeLink(url, text) {
     return a;
 }
 
+/** A spool's storage place as clean text ('' when none). */
+export function locationOf(spool) {
+    return typeof (spool && spool.location) === 'string' ? spool.location.trim() : '';
+}
+
 export function showError(el, message) {
     el.textContent = message;
     el.hidden = false;

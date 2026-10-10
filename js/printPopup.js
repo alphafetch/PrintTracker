@@ -1,5 +1,5 @@
 import { amsLoadedList, amsSlotLabel } from './ams.js';
-import { activeSpools, gramsUsedOfSpool, hasManyPrinters, printerIdOf, printerIds, printerName, remainingOf, tagKey, tagTotals, tagsOf, usageOf } from './calc.js';
+import { activeSpools, adjustOf, gramsUsedOfSpool, hasManyPrinters, printerIdOf, printerIds, printerName, remainingOf, tagKey, tagTotals, tagsOf, usageOf } from './calc.js';
 import { FAIL_REASONS } from './constants.js';
 import { renderAll } from './render.js';
 import { cleanFailReason, cleanProfile, cleanQueueSpec, cleanTags, saveState, state } from './state.js';
@@ -50,6 +50,7 @@ resultFailure.addEventListener('change', syncFailField);
 let printReturn = null;   // what had focus before the popup opened
 export let editingPrintId = null;   // null means "create a new print"
 export let pendingQueueId = null;   // queue item to mark done once the print is saved
+export let pendingRunningId = null; // running timer to remove once the print is saved
 
 export function updateBodyLock() {
     const open = Array.from(document.querySelectorAll('.popup')).some((p) => p.style.display === 'block');
@@ -63,8 +64,9 @@ export function updateBodyLock() {
  *   name, link  pre-fill for a new print (used by the queue)
  *   spec        more pre-fill from a queue item (print time, spools, profile, notes, printer)
  *   queueId     queue item to tick off after saving
+ *   runningId   running timer to remove after saving; `failed` opens it as a failed print
  */
-export function openPrintPopup({ printId = null, copyFromId = null, name = '', link = '', queueId = null, spec = null } = {}) {
+export function openPrintPopup({ printId = null, copyFromId = null, name = '', link = '', queueId = null, spec = null, runningId = null, failed = false } = {}) {
     if (!printId && activeSpools().length === 0) {
         notify('Add a filament spool first (Filament tab).', true);
         return;
@@ -72,6 +74,7 @@ export function openPrintPopup({ printId = null, copyFromId = null, name = '', l
 
     editingPrintId = printId;
     pendingQueueId = queueId;
+    pendingRunningId = runningId && state.running[runningId] ? runningId : null;
     const print = printId ? state.prints[printId] : null;
     const queued = !print && !copyFromId ? cleanQueueSpec(spec) : null;
     const source = print || (copyFromId ? state.prints[copyFromId] : null) || (queued ? { ...queued, name, link } : null);
@@ -82,7 +85,7 @@ export function openPrintPopup({ printId = null, copyFromId = null, name = '', l
     nameInput.value = source ? (source.name || '') : name;
     printDateInput.value = print && isValidDate(print.date) ? print.date : todayLocal();
     linkInput.value = source ? (source.link || '') : link;
-    if (print && !print.result) {
+    if ((print && !print.result) || (!print && failed)) {
         resultFailure.checked = true;
     } else {
         resultSuccess.checked = true;
@@ -111,6 +114,9 @@ export function openPrintPopup({ printId = null, copyFromId = null, name = '', l
     fillPrinterSelect(print ? printerIdOf(print) : (source && source.printerId !== undefined ? printerIdOf(source) : lastPrinterId()));
     renderAmsQuick();
     clearError(printError);
+    const slicerNote = $('slicer-note');
+    slicerNote.textContent = '';
+    slicerNote.hidden = true;
     printReturn = document.activeElement;
     printPopup.style.display = 'block';
     printPopup.scrollTop = 0;
@@ -167,6 +173,7 @@ export function closePrintPopup() {
     printReturn = null;
     editingPrintId = null;
     pendingQueueId = null;
+    pendingRunningId = null;
     updateBodyLock();
 }
 
@@ -243,7 +250,7 @@ export function renderAmsQuick() {
         chip.type = 'button';
         chip.dataset.spool = spoolId;
         chip.appendChild(makeSwatch(spoolHex(s)));
-        chip.append(` ${s.brand} ${s.color} \u00B7 ${label}`);
+        chip.append(` ${s.brand}, ${s.color} \u00B7 ${label}`);
         chip.addEventListener('click', () => addAmsRow(spoolId));
         chips.appendChild(chip);
     }
@@ -282,7 +289,7 @@ export function updateRowHint(row) {
     const spool = state.spools[select.value];
 
     if (spool && Number.isFinite(grams) && grams > 0) {
-        const left = (Number(spool.startGrams) || 0) - gramsUsedOfSpool(select.value, editingPrintId);
+        const left = (Number(spool.startGrams) || 0) + adjustOf(spool) - gramsUsedOfSpool(select.value, editingPrintId);
         if (grams > left) {
             hint.textContent = `Heads up: only ~${fmtGrams(Math.max(left, 0))}g left on this spool. You can still save.`;
             hint.hidden = false;
@@ -355,6 +362,9 @@ export function savePrint() {
     }
     if (pendingQueueId && state.queue[pendingQueueId]) {
         state.queue[pendingQueueId].done = true;
+    }
+    if (pendingRunningId && state.running[pendingRunningId]) {
+        delete state.running[pendingRunningId];
     }
 
     saveState();

@@ -1,5 +1,6 @@
 import { costOfPrint, energyCostOfPrint, hasManyPrinters, printerIdOf, printerName, tagKey, tagTotals, tagsOf, totalGramsOfPrint, usageOf, wearCostOfPrint } from './calc.js';
 import { DEFAULT_SWATCH, failReasonLabel } from './constants.js';
+import { isSelected, isSelecting, setVisible, toggleSelected } from './bulk.js';
 import { openPrintPopup } from './printPopup.js';
 import { emptyState_, makeBadge, plural, renderAll } from './render.js';
 import { cleanQueueSpec, saveState, state } from './state.js';
@@ -114,6 +115,7 @@ export function renderPrints() {
     renderTagControls();
 
     if (all.length === 0) {
+        setVisible([]);
         $('prints-sub').textContent = 'Everything you have printed.';
         printList.appendChild(emptyState_('No prints yet! Click the + to start a new print!',
             'Each print subtracts its filament from the spools you pick.'));
@@ -138,6 +140,7 @@ export function renderPrints() {
         default: entries.sort((a, b) => byDate(b, a));
     }
 
+    setVisible(entries.map(([id]) => id));
     const filtered = entries.length !== all.length;
     $('prints-sub').textContent = filtered
         ? `Showing ${entries.length} of ${plural(all.length, 'print')}`
@@ -156,6 +159,18 @@ export function buildPrintCard(id, p) {
     card.classList.add(p.result ? 'is-success' : 'is-failure');
 
     const head = h('div', 'card-head');
+    if (isSelecting()) {
+        const box = h('input', 'check-input select-box');
+        box.type = 'checkbox';
+        box.checked = isSelected(id);
+        box.setAttribute('aria-label', `Select ${p.name || 'Untitled print'}`);
+        box.addEventListener('change', () => {
+            toggleSelected(id, box.checked);
+            card.classList.toggle('is-selected', box.checked);
+        });
+        head.appendChild(box);
+        card.classList.toggle('is-selected', box.checked);
+    }
     const title = h('h2', 'card-title', p.name || 'Untitled print');
     head.appendChild(title);
     head.appendChild(makeBadge(p.result ? 'Success' : 'Failure', p.result ? 'green' : 'red'));

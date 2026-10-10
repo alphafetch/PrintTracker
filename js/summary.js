@@ -65,7 +65,7 @@ export function summaryRows(sum) {
         if (sum.longest) rows.push(['Longest print', `${sum.longest.name} (${fmtDuration(sum.longest.minutes)})`]);
         if (sum.heaviest) rows.push(['Most filament', `${sum.heaviest.name} (${fmtGrams(sum.heaviest.grams)}g)`]);
         if (sum.busiest && sum.busiest.n > 1) rows.push(['Busiest day', `${formatDate(sum.busiest.date)} (${plural(sum.busiest.n, 'print')})`]);
-        if (sum.topSpool) rows.push(['Most used spool', `${sum.topSpool.spool.brand} ${sum.topSpool.spool.color} (${fmtGrams(sum.topSpool.grams)}g)`]);
+        if (sum.topSpool) rows.push(['Most used spool', `${sum.topSpool.spool.brand}, ${sum.topSpool.spool.color} (${fmtGrams(sum.topSpool.grams)}g)`]);
         if (sum.printers.length > 1) {
             rows.push(['By printer', sum.printers.map((p) => `${printerName(p.id)}: ${plural(p.prints, 'print')}${p.minutes > 0 ? `, ${fmtDuration(p.minutes)}` : ''}`).join('; ')]);
         }

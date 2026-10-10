@@ -1,8 +1,8 @@
 # Print Tracker
 
-A personal 3D print and filament tracker for Bambu Lab, FlashForge and ELEGOO printers. Plain HTML, CSS and JavaScript (ES modules), no build step, no dependencies. Data lives in your browser's localStorage and can be exported/imported as JSON.
+A personal 3D print and filament tracker for Bambu Lab, FlashForge and ELEGOO printers. Plain HTML, CSS and JavaScript (ES modules), no build step, no dependencies to run it (the test suite has its own dev dependencies, see Tests). Data lives in your browser's localStorage and can be exported/imported as JSON.
 
-> **Disclaimer:** this whole project was written by an AI (Claude) from plain-English requests, with me steering and testing it. It is a hobby tool, not professionally engineered software. Costs, power figures and upkeep intervals are estimates, and the code may have bugs.
+> **Vibe-coded disclaimer:** this whole project was written by an AI (Claude) from plain-English requests, with me steering and testing it. It is a hobby tool, not professionally engineered software. Costs, power figures and upkeep intervals are estimates, and the code may have bugs. Export a backup regularly, and double-check any number you rely on.
 
 ## Features
 
@@ -28,6 +28,11 @@ A personal 3D print and filament tracker for Bambu Lab, FlashForge and ELEGOO pr
 - **Print summary:** a recap of the last 7 or 30 days, this or last month, or this year. Copy it, save it as text, or print it.
 - **Print calendar:** a year of squares on the dashboard (one per day, darker with more prints) with weekly streaks.
 - **More than one printer:** Settings > Printer can add up to 5 more printers. Each has its own details, electricity, wear, hours, wear parts and reminders; every print records which printer made it (the picker only appears once you have two). AMS units stay shared. Removing a printer moves its prints to the main one and deletes its parts and reminders (Undo restores them).
+- **Getting started guide:** a short checklist at the top of the dashboard for anyone new (pick the printer, add a spool, optionally set up an AMS, log a print, back up). Steps tick themselves off from your data, and it explains that data stays in this browser. Hide it any time; bring it back in Settings > Preferences. People who already have prints are not shown it.
+- **Printing now:** start a timer for a print that is running (from the dashboard, or "Start" on a queue item), with an optional estimate. The dashboard shows time so far, a progress bar and the time left. "Finished" opens the print form filled in (and ticks off the queue item); "Failed" fills in a failure with the time it ran; "Stop timer" forgets it (Undo restores it). Up to 6 timers can run at once.
+- **Re-weigh a spool:** put a spool on a scale, enter the reading and the empty-spool weight, and the app corrects its grams-left (prints logged afterwards still subtract). The empty weight is remembered. Spools can also record where they are stored ("Dry box 2"), shown on the card and on labels, with suggestions from places you already used.
+- **Fill from a slicer file:** in the print popup, pick a `.gcode.3mf` (Bambu Studio / Orca) or a `.gcode` file to fill in the name, print time, grams per filament, the matching spool (by material and colour) and the profile. The file is read in your browser and never uploaded. The `.gcode.3mf` format is documented; the weight and time comments in plain `.gcode` differ by slicer and were written from memory of Bambu, Orca and Prusa output (Cura gives time only), so check the numbers it fills in. Binary G-code (`.bgcode`) is not supported.
+- **Select several prints:** the Select button on the Prints tab adds checkboxes. Tag or untag the selected prints, export just them as a CSV, or delete them (Undo restores them, and a snapshot is taken first). Selections only ever include prints currently shown by your search and filters.
 - **Undo and snapshots:** deleting a spool, archiving, clearing the queue, deleting all data and resetting settings can all be undone from the toast. The last 5 versions of your data are also kept in this browser (daily, and before an import or delete-all) and can be restored from the Data tab. They are not a real backup.
 - **Accessibility:** skip link, keyboard navigation for tabs and popups, focus returns after popups close, visible focus, and text contrast of at least 4.5:1 in both themes and every accent.
 - **Achievements:** 44 of them in seven groups, with progress bars and silly names.
@@ -60,11 +65,24 @@ python -m http.server 8000
 
 Then visit http://localhost:8000.
 
+## Tests
+
+The app has no build step, but there is a test suite that loads the real page in jsdom and clicks through it. You need Node 18 or newer.
+
+```
+npm install
+npm test          # run the tests
+npm run lint      # ESLint over js/ and tests/
+```
+
+`tests/run.js` bundles `js/main.js` with esbuild in memory, loads `index.html` into jsdom, and checks the behaviour of every tab, popup, import and export path, along with accessibility basics (names on controls, focus handling) and a few CSS rules. It prints `ok` or `FAIL` for each check and exits with an error code if any fail.
+
 ## Project structure
 
 ```
 index.html
 css/styles.css
+tests/run.js      the test suite (see Tests)
 js/main.js        start-up
 js/ams.js         AMS units and slots
 js/achievements.js  achievements
@@ -81,6 +99,11 @@ js/settings.js  js/settingsKit.js  js/settingsPrinter.js  js/settingsAppearance.
 js/upkeep.js      Upkeep tab: hours, wear parts, drying, reminders
 js/analysis.js  js/labels.js  js/materials.js
 js/shopping.js  js/colors.js  js/summary.js  js/heatmap.js   shopping list, colour matching, recap, calendar
+js/weigh.js       re-weigh a spool
+js/slicerFile.js  js/slicerFill.js   read .gcode / .gcode.3mf and fill the print form
+js/running.js     "Printing now" timers and the start popup
+js/bulk.js        select several prints
+js/guide.js       getting-started checklist
 js/snapshots.js  js/snapshotPanel.js
 js/popups.js
 ```

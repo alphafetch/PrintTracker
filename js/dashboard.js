@@ -8,7 +8,9 @@ import { openSpoolPopup } from './spoolPopup.js';
 import { saveState, state } from './state.js';
 import { showTab } from './tabs.js';
 import { $, fmtDuration, fmtGrams, fmtMoney, formatDate, h, isObject, makeLink, makeSwatch, materialKey, normalizeLink, spoolHex, svgEl, todayLocal } from './util.js';
+import { buildGuidePanel } from './guide.js';
 import { buildHeatmapPanel } from './heatmap.js';
+import { buildRunningPanel, openStartPopup } from './running.js';
 import { openSummaryPopup } from './summary.js';
 import { buildBackupBanner, buildPrinterPanels } from './widgets.js';
 
@@ -99,6 +101,12 @@ function buildRangeBar(range) {
         renderDashboard();
     });
     bar.append(label, select);
+    const start = h('button', 'btn btn-outline btn-small', 'Start a print');
+    start.type = 'button';
+    start.id = 'start-button';
+    start.title = 'Start a timer for a print that is running';
+    start.addEventListener('click', () => openStartPopup());
+    bar.appendChild(start);
     const recap = h('button', 'btn btn-outline btn-small', 'Summary');
     recap.type = 'button';
     recap.id = 'summary-button';
@@ -167,7 +175,9 @@ export function renderDashboard() {
     const range = state.ui.range;
     const stats = range === 'all' ? all : calcStats(range);
 
+    const guide = buildGuidePanel();
     if (all.total === 0 && all.spoolCount === 0) {
+        if (guide) root.appendChild(guide);
         const box = emptyState_('Nothing to show yet.', 'Add a spool in the Filament tab, then log your first print.');
         const go = h('button', 'btn btn-primary', 'Add your first spool');
         go.type = 'button';
@@ -177,6 +187,9 @@ export function renderDashboard() {
         return;
     }
 
+    const running = buildRunningPanel();
+    if (running) root.appendChild(running);
+    if (guide) root.appendChild(guide);
     const banner = buildBackupBanner();
     if (banner) root.appendChild(banner);
     root.appendChild(buildRangeBar(range));

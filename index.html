@@ -186,6 +186,13 @@
         <div class="popup-content">
             <h3 id="print-popup-title" class="popup-title">Create Print</h3>
 
+            <div class="field slicer-field">
+                <button type="button" id="slicer-file-button" class="btn btn-outline btn-small">Fill from slicer file</button>
+                <input type="file" id="slicer-file" accept=".3mf,.gcode,.gco,.g,.txt,.bgcode" aria-label="Slicer file" hidden>
+                <p class="secondary-text small">Reads the name, print time and grams from a .gcode or .gcode.3mf file. The file stays in your browser and is never uploaded.</p>
+                <p id="slicer-note" class="secondary-text small" role="status" hidden></p>
+            </div>
+
             <div class="field">
                 <label for="name-tinput">Name</label>
                 <input type="text" spellcheck="false" id="name-tinput" class="text-input" maxlength="80" placeholder="e.g., Plate Scraper">
@@ -325,6 +332,12 @@
             <div class="field">
                 <label for="date-dinput">Date bought</label>
                 <input type="date" id="date-dinput" class="date-input" required>
+            </div>
+
+            <div class="field">
+                <label for="location-tinput">Stored in (optional)</label>
+                <input type="text" id="location-tinput" class="text-input" maxlength="40" list="location-list" placeholder="e.g., Dry box 2, Shelf A" autocomplete="off">
+                <datalist id="location-list"></datalist>
             </div>
 
             <div class="field" id="dried-field">

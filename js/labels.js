@@ -1,6 +1,6 @@
 import { activeSpools } from './calc.js';
 import { updateBodyLock } from './printPopup.js';
-import { $, fmtGrams, fmtMoney, formatDate, h, isObject, notify, spoolHex } from './util.js';
+import { $, fmtGrams, fmtMoney, formatDate, h, isObject, locationOf, notify, spoolHex } from './util.js';
 import { state } from './state.js';
 
 // ---------- Printable spool labels ----------
@@ -30,6 +30,7 @@ export function buildLabel(spool, { price = true, date = true } = {}) {
     body.appendChild(h('span', 'label-color', `${spool.color} · ${String(spool.material || 'other').toUpperCase()}`));
     const grams = Number(spool.startGrams) || 0;
     body.appendChild(h('span', 'label-line', `${fmtGrams(grams)} g`));
+    if (locationOf(spool)) body.appendChild(h('span', 'label-line', `Stored: ${locationOf(spool)}`));
     if (date && spool.date) body.appendChild(h('span', 'label-line', `Bought ${formatDate(spool.date)}`));
     if (price && Number.isFinite(spool.price)) {
         const perGram = grams > 0 ? ` (${fmtMoney(spool.price / grams, 3)}/g)` : '';

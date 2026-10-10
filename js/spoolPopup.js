@@ -3,7 +3,7 @@ import { updateBodyLock } from './printPopup.js';
 import { renderAll } from './render.js';
 import { saveState, state } from './state.js';
 import { similarHintText } from './colors.js';
-import { $, clearError, guessHex, isHex, isValidDate, showError, spoolHex, todayLocal, uid } from './util.js';
+import { $, clearError, guessHex, isHex, isValidDate, locationOf, showError, spoolHex, todayLocal, uid } from './util.js';
 
 // ---------- Spool popup ----------
 
@@ -16,6 +16,7 @@ export const gramsInput = $('grams-ninput');
 export const priceInput = $('price-ninput');
 export const spoolDateInput = $('date-dinput');
 export const driedInput = $('dried-dinput');
+export const locationInput = $('location-tinput');
 export const spoolError = $('spool-error');
 
 export let hexTouched = false;   // true once the person picks a swatch color by hand
@@ -50,6 +51,8 @@ export function openSpoolPopup({ copyFromId = null, editId = null } = {}) {
     priceInput.value = source && Number.isFinite(source.price) ? String(source.price) : '';
     spoolDateInput.value = editing && isValidDate(editing.date) ? editing.date : todayLocal();
     driedInput.value = editing && isValidDate(editing.driedDate) ? editing.driedDate : '';
+    locationInput.value = source ? locationOf(source) : '';
+    renderLocationOptions();
     clearError(spoolError);
     updateSimilarHint();
     spoolReturn = document.activeElement;
@@ -57,6 +60,22 @@ export function openSpoolPopup({ copyFromId = null, editId = null } = {}) {
     spoolPopup.scrollTop = 0;
     updateBodyLock();
     (source ? gramsInput : brandInput).focus();
+}
+
+/** Suggest the places already used on other spools. */
+export function renderLocationOptions() {
+    const list = $('location-list');
+    const seen = new Set();
+    list.replaceChildren();
+    for (const s of Object.values(state.spools)) {
+        const place = locationOf(s);
+        if (place && !seen.has(place.toLowerCase())) {
+            seen.add(place.toLowerCase());
+            const o = document.createElement('option');
+            o.value = place;
+            list.appendChild(o);
+        }
+    }
 }
 
 /** "You already have a close colour" hint under the colour field. */
@@ -107,7 +126,12 @@ export function saveSpool() {
         : (color.toLowerCase() === startColor ? startExplicit : (guessHex(color) || ''));
     const id = editingSpoolId && state.spools[editingSpoolId] ? editingSpoolId : uid();
     const wasArchived = Boolean(editingSpoolId && state.spools[id] && state.spools[id].archived);
+    const old = editingSpoolId && state.spools[id] ? state.spools[id] : null;
+    const kept = {};
+    if (old) for (const k of ['adjust', 'emptyGrams', 'weighedDate']) if (old[k] !== undefined) kept[k] = old[k];
     state.spools[id] = {
+        ...kept,
+        location: locationInput.value.trim(),
         brand,
         material: materialDropdown.value,
         color,

@@ -4,8 +4,9 @@ import { dryingAdvice } from './catalog.js';
 import { setupLabelsButton } from './labels.js';
 import { emptyState_, makeBadge, plural, renderAll } from './render.js';
 import { openSpoolPopup } from './spoolPopup.js';
+import { openWeighPopup } from './weigh.js';
 import { saveState, state } from './state.js';
-import { $, fmtGrams, fmtMoney, formatDate, h, icon, isObject, isValidDate, makeSwatch, materialKey, notify, spoolHex, todayLocal } from './util.js';
+import { $, fmtGrams, fmtMoney, formatDate, h, icon, isObject, isValidDate, locationOf, makeSwatch, materialKey, notify, spoolHex, todayLocal } from './util.js';
 
 // ---------- Rendering: spools ----------
 
@@ -76,7 +77,7 @@ export function buildSpoolCard(id, s) {
 
     const start = Number(s.startGrams) || 0;
     const used = gramsUsedOfSpool(id);
-    const remaining = start - used;
+    const remaining = remainingOf(id, s);
     const fraction = start > 0 ? remaining / start : 0;
     const pct = Math.max(0, Math.round(fraction * 100));
     const level = fraction > warnFraction() ? 'ok' : fraction > lowFraction() ? 'warn' : 'fail';
@@ -132,6 +133,13 @@ export function buildSpoolCard(id, s) {
     card.appendChild(h('div', 'card-meta card-meta-soft',
         uses === 0 ? 'Not used yet' : `Used in ${plural(uses, 'print')} · ${fmtGrams(used)}g logged`));
 
+    const where = locationOf(s);
+    const weighed = isValidDate(s.weighedDate) ? `Weighed ${formatDate(s.weighedDate)}` : '';
+    if (where || weighed) {
+        card.appendChild(h('div', 'card-meta card-meta-soft where-line',
+            [where ? `Stored: ${where}` : '', weighed].filter(Boolean).join(' · ')));
+    }
+
     const forecast = spoolForecast(id, s);
     if (forecast) {
         const pace = `${fmtGrams(forecast.perWeek)}g a week`;
@@ -164,6 +172,14 @@ export function buildSpoolCard(id, s) {
         dry.title = 'Log that you dried this spool today';
         dry.addEventListener('click', () => markDried(id));
         buttons.appendChild(dry);
+    }
+
+    if (!s.archived) {
+        const weigh = h('button', 'btn btn-outline btn-small', 'Re-weigh');
+        weigh.type = 'button';
+        weigh.title = 'Correct the grams left using a scale';
+        weigh.addEventListener('click', () => openWeighPopup(id));
+        buttons.appendChild(weigh);
     }
 
     const edit = h('button', 'btn btn-outline btn-small', 'Edit');

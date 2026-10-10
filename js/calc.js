@@ -120,8 +120,15 @@ export function wearCostOfPrint(print) {
     return (minutes / 60) * rate;
 }
 
+/** Grams the person corrected after weighing the spool on a scale (can be negative). */
+export function adjustOf(spool) {
+    const a = Number(spool && spool.adjust);
+    return Number.isFinite(a) ? a : 0;
+}
+
+/** Grams left on a spool: the starting weight, plus any re-weigh correction, minus everything logged. */
 export function remainingOf(id, spool) {
-    return (Number(spool.startGrams) || 0) - gramsUsedOfSpool(id);
+    return (Number(spool.startGrams) || 0) + adjustOf(spool) - gramsUsedOfSpool(id);
 }
 
 export function totalGramsOfPrint(print) {
@@ -285,7 +292,7 @@ export function calcStats(range = 'all', printerId = null) {
     const healthy = {};   // material -> number of active spools that are not low
     for (const [id, s] of active) {
         const start = Number(s.startGrams) || 0;
-        const left = start - gramsUsedOfSpool(id);
+        const left = remainingOf(id, s);
         gramsLeft += Math.max(0, left);
         const low = start > 0 && left / start <= lowFraction();
         if (low) lowSpools.push({ id, spool: s, left });

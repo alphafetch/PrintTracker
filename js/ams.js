@@ -112,7 +112,7 @@ function buildSlot(unitId, unit, index) {
         const row = h('div', 'ams-spool');
         row.appendChild(makeSwatch(spoolHex(spool)));
         const text = h('div', 'ams-spool-text');
-        text.appendChild(h('span', 'list-title', `${spool.brand} ${spool.color}`));
+        text.appendChild(h('span', 'list-title', `${spool.brand}, ${spool.color}`));
         text.appendChild(h('span', 'list-sub', `${String(spool.material).toUpperCase()} · ${fmtGrams(left)}g left${frac <= lowFraction() ? ' · running low' : ''}`));
         row.appendChild(text);
         slot.appendChild(row);
@@ -134,7 +134,7 @@ function buildSlot(unitId, unit, index) {
     for (const [id, s] of Object.entries(state.spools)) {
         if (!isObject(s) || s.archived) continue;
         if (elsewhere.has(id) && id !== spoolId) continue;
-        const o = h('option', null, `${s.brand} ${s.color}`);
+        const o = h('option', null, `${s.brand}, ${s.color}`);
         o.value = id;
         select.appendChild(o);
     }
