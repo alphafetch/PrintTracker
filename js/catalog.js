@@ -222,3 +222,31 @@ export function autoAmsPrice(type, currency) {
     if (!t || !Number.isFinite(t.price) || currency !== '$') return null;
     return { value: t.price, note: `Bambu Lab US store price for the ${t.label}`, url: t.url };
 }
+
+// ---------- Material guide ----------
+//
+// Copied from Bambu Lab's own wiki (see MATERIAL_SOURCES). These are Bambu's numbers for Bambu filament;
+// other brands differ, and the label on your spool wins. Materials the wiki does not cover are left out.
+
+export const MATERIAL_GUIDE = [
+    { key: 'pla', label: 'PLA', nozzle: '190-240', bed: '45-65', oven: '55 °C, 8 h', heatbed: '65-75 °C, 12 h', ovenC: 55, ovenH: 8, enclosure: 'Open or enclosed', ams: true, dry: 'Recommended' },
+    { key: 'petg', label: 'PETG', nozzle: '240-270', bed: '60-80', oven: '70 °C, 8 h', heatbed: '75-85 °C, 12 h', ovenC: 70, ovenH: 8, enclosure: 'Enclosed preferred', ams: true, dry: 'Recommended' },
+    { key: 'abs', label: 'ABS', nozzle: '240-280', bed: '90-100', oven: '80 °C, 8 h', heatbed: '90-100 °C, 12 h', ovenC: 80, ovenH: 8, enclosure: 'Enclosed recommended', ams: true, dry: 'Recommended' },
+    { key: 'asa', label: 'ASA', nozzle: '240-280', bed: '90-100', oven: '80 °C, 8 h', heatbed: '90-100 °C, 12 h', ovenC: 80, ovenH: 8, enclosure: 'Enclosed recommended', ams: true, dry: 'Recommended' },
+    { key: 'tpu', label: 'TPU', nozzle: '200-250', bed: '35-45', oven: '70 °C, 8 h', heatbed: '80-90 °C, 12 h', ovenC: 70, ovenH: 8, enclosure: 'Open or enclosed', ams: false, dry: 'Required' }
+];
+
+export const MATERIAL_SOURCES = [
+    { text: 'Bambu Lab wiki: filament guide material table', url: 'https://wiki.bambulab.com/en/general/filament-guide-material-table' },
+    { text: 'Bambu Lab wiki: drying filament on the heatbed', url: 'https://wiki.bambulab.com/en/general/bambu-filament-drying-cover' }
+];
+
+export function findMaterial(key) {
+    return MATERIAL_GUIDE.find((m) => m.key === String(key).toLowerCase()) || null;
+}
+
+/** One sentence of drying advice for a material, or '' when the guide has none. */
+export function dryingAdvice(key) {
+    const m = findMaterial(key);
+    return m ? `Bambu Lab suggests drying ${m.label} at ${m.ovenC} °C for ${m.ovenH} h in a drying oven.` : '';
+}

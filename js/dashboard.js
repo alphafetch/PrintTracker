@@ -1,4 +1,5 @@
 import { buildAchievementsPanel } from './achievements.js';
+import { findMaterial } from './catalog.js';
 import { calcStats, hardwareCost, totalGramsOfPrint } from './calc.js';
 import { failReasonLabel, MATERIAL_COLORS, MONTHS, RANGES, Sections } from './constants.js';
 import { openPrintPopup } from './printPopup.js';
@@ -6,7 +7,7 @@ import { emptyState_, makeBadge, plural } from './render.js';
 import { openSpoolPopup } from './spoolPopup.js';
 import { saveState, state } from './state.js';
 import { showTab } from './tabs.js';
-import { $, fmtDuration, fmtGrams, fmtMoney, formatDate, h, isObject, makeLink, makeSwatch, normalizeLink, spoolHex, svgEl, todayLocal } from './util.js';
+import { $, fmtDuration, fmtGrams, fmtMoney, formatDate, h, isObject, makeLink, makeSwatch, materialKey, normalizeLink, spoolHex, svgEl, todayLocal } from './util.js';
 import { buildBackupBanner, buildPrinterPanel } from './widgets.js';
 
 // ---------- Rendering: dashboard ----------
@@ -243,7 +244,8 @@ export function renderDashboard() {
             row.appendChild(makeSwatch(spoolHex(spool)));
             const text = h('span', 'list-main');
             text.appendChild(h('span', 'list-title', `${spool.brand}, ${spool.color}`));
-            text.appendChild(h('span', 'list-sub', `${String(spool.material || 'other').toUpperCase()} \u00B7 ${dried ? 'dried' : 'opened'} ${plural(days, 'day')} ago`));
+            text.appendChild(h('span', 'list-sub', `${String(spool.material || 'other').toUpperCase()} \u00B7 ${dried ? 'dried' : 'opened'} ${plural(days, 'day')} ago` +
+                (findMaterial(materialKey(spool)) ? ` \u00B7 oven: ${findMaterial(materialKey(spool)).oven}` : '')));
             row.appendChild(text);
             row.appendChild(makeBadge('Needs drying?', 'amber'));
             row.addEventListener('click', () => showTab(Sections.FILA));

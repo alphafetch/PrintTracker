@@ -105,8 +105,11 @@ queueNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addQu
 queueLinkInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addQueueItem(); });
 $('queue-clear-done-button').addEventListener('click', () => {
     const doneIds = Object.entries(state.queue).filter(([, q]) => isObject(q) && q.done).map(([id]) => id);
+    const removed = Object.fromEntries(doneIds.map((id) => [id, state.queue[id]]));
     doneIds.forEach((id) => { delete state.queue[id]; });
     saveState();
     renderAll();
-    notify(`Cleared ${doneIds.length} finished item${doneIds.length === 1 ? '' : 's'}.`);
+    notify(`Cleared ${doneIds.length} finished item${doneIds.length === 1 ? '' : 's'}.`, {
+        action: { label: 'Undo', onClick: () => { Object.assign(state.queue, removed); saveState(); renderAll(); } }
+    });
 });

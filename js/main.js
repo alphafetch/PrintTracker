@@ -3,7 +3,9 @@ import { setupPopups } from './popups.js';
 import { printPopup } from './printPopup.js';
 import { setupPrintsToolbar } from './prints.js';
 import { renderAll } from './render.js';
+import { dailySnapshot } from './snapshots.js';
 import { buildSettings } from './settings.js';
+import { buildUpkeepTab } from './upkeep.js';
 import { spoolPopup } from './spoolPopup.js';
 import { setupSpoolToolbar } from './spools.js';
 import { buildHeader, showTab } from './tabs.js';
@@ -17,10 +19,16 @@ document.body.appendChild(printPopup);
 document.body.appendChild(spoolPopup);
 
 setupPopups();
+document.getElementById('skip-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('app').focus();
+});
 buildHeader();
 setupPrintsToolbar();
 setupSpoolToolbar();
 buildSettings();
+buildUpkeepTab();
+dailySnapshot();
 applyTheme();
 renderAll();
 {

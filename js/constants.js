@@ -4,6 +4,8 @@
 
 export const STORAGE_KEY = 'printTracker';
 export const CORRUPT_KEY = 'printTracker.corrupt';
+export const SNAPSHOT_KEY = 'printTracker.snapshots';
+export const MAX_SNAPSHOTS = 5;
 export const SCHEMA_VERSION = 1;
 export const SETTINGS_VERSION = 2;
 export const SPOOL_GRAMS = 1000;   // one "spool" of upkeep counting = 1 kg of filament printed
@@ -37,6 +39,7 @@ export const Sections = Object.freeze({
     PRINTS: 'prints',
     FILA: 'filament',
     QUEUE: 'queue',
+    UPKEEP: 'upkeep',
     DATA: 'data',
     SETTINGS: 'settings'
 });
@@ -46,17 +49,18 @@ export const TABS = [
     { label: 'Prints',    idPrefix: 'prints',   section: Sections.PRINTS,   icon: 'cube' },
     { label: 'Filament',  idPrefix: 'fila',     section: Sections.FILA,     icon: 'spool' },
     { label: 'Queue',     idPrefix: 'queue',    section: Sections.QUEUE,    icon: 'list' },
+    { label: 'Upkeep',    idPrefix: 'upkeep',   section: Sections.UPKEEP,   icon: 'wrench' },
     { label: 'Data',      idPrefix: 'data',     section: Sections.DATA,     icon: 'download' },
     { label: 'Settings',  idPrefix: 'settings', section: Sections.SETTINGS, icon: 'gear' }
 ];
 
 // Accent colors. Each has a dark-theme and a light-theme variant so text stays readable.
 export const ACCENTS = {
-    amber:   { label: 'Amber',   dark: { accent: '#f59e0b', strong: '#fbbf24', link: '#fbbf24' }, light: { accent: '#f59e0b', strong: '#d97706', link: '#b45309' } },
+    amber:   { label: 'Amber',   dark: { accent: '#f59e0b', strong: '#fbbf24', link: '#fbbf24' }, light: { accent: '#f59e0b', strong: '#d97706', link: '#a64a08' } },
     sky:     { label: 'Sky',     dark: { accent: '#38bdf8', strong: '#7dd3fc', link: '#7dd3fc' }, light: { accent: '#0ea5e9', strong: '#0284c7', link: '#0369a1' } },
-    emerald: { label: 'Emerald', dark: { accent: '#34d399', strong: '#6ee7b7', link: '#6ee7b7' }, light: { accent: '#10b981', strong: '#059669', link: '#047857' } },
-    teal:    { label: 'Teal',    dark: { accent: '#2dd4bf', strong: '#5eead4', link: '#5eead4' }, light: { accent: '#14b8a6', strong: '#0d9488', link: '#0f766e' } },
-    violet:  { label: 'Violet',  dark: { accent: '#a78bfa', strong: '#c4b5fd', link: '#c4b5fd' }, light: { accent: '#8b5cf6', strong: '#7c3aed', link: '#6d28d9' } },
+    emerald: { label: 'Emerald', dark: { accent: '#34d399', strong: '#6ee7b7', link: '#6ee7b7' }, light: { accent: '#10b981', strong: '#059669', link: '#046c4e' } },
+    teal:    { label: 'Teal',    dark: { accent: '#2dd4bf', strong: '#5eead4', link: '#5eead4' }, light: { accent: '#14b8a6', strong: '#0d9488', link: '#0b6b64' } },
+    violet:  { label: 'Violet',  dark: { accent: '#a78bfa', strong: '#c4b5fd', link: '#c4b5fd' }, light: { accent: '#9568f7', strong: '#7c3aed', link: '#6d28d9' } },
     rose:    { label: 'Rose',    dark: { accent: '#fb7185', strong: '#fda4af', link: '#fda4af' }, light: { accent: '#f43f5e', strong: '#e11d48', link: '#be123c' } }
 };
 
@@ -121,6 +125,14 @@ export function failReasonLabel(key) {
     const hit = FAIL_REASONS.find(([k]) => k === key);
     return hit ? hit[1] : '';
 }
+
+/** How the filament cost analysis can group spools. */
+export const ANALYSIS_GROUPS = [
+    ['brand-material', 'Brand and material'],
+    ['material', 'Material'],
+    ['brand', 'Brand'],
+    ['spool', 'Each spool']
+];
 
 /** Date ranges for the dashboard stats. */
 export const RANGES = [

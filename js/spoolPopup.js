@@ -18,6 +18,7 @@ export const driedInput = $('dried-dinput');
 export const spoolError = $('spool-error');
 
 export let hexTouched = false;   // true once the person picks a swatch color by hand
+let spoolReturn = null;   // what had focus before the popup opened
 export let editingSpoolId = null; // null means "add a new spool"
 let startColor = '';              // the color text the popup opened with
 let startHex = '';                // and the swatch that went with it
@@ -47,6 +48,7 @@ export function openSpoolPopup({ copyFromId = null, editId = null } = {}) {
     spoolDateInput.value = editing && isValidDate(editing.date) ? editing.date : todayLocal();
     driedInput.value = editing && isValidDate(editing.driedDate) ? editing.driedDate : '';
     clearError(spoolError);
+    spoolReturn = document.activeElement;
     spoolPopup.style.display = 'block';
     spoolPopup.scrollTop = 0;
     updateBodyLock();
@@ -56,6 +58,8 @@ export function openSpoolPopup({ copyFromId = null, editId = null } = {}) {
 export function closeSpoolPopup() {
     editingSpoolId = null;
     spoolPopup.style.display = 'none';
+    if (spoolReturn && typeof spoolReturn.focus === 'function' && document.contains(spoolReturn)) spoolReturn.focus();
+    spoolReturn = null;
     updateBodyLock();
 }
 

@@ -268,6 +268,59 @@ export function calcStats(range = 'all') {
     };
 }
 
+/**
+ * Cost analysis per group of spools. For each group:
+ *   perKg    what you paid per kg (priced spools only)
+ *   wastePct share of the filament used that went into failed prints
+ *   trueKg   perKg divided by the share that ended up in good prints: what a kilo of *useful* filament costs
+ */
+export function spoolCostGroups(groupBy = 'brand-material') {
+    const groups = new Map();
+    const keyOf = (s) => {
+        const brand = String(s.brand || 'Unknown').trim();
+        const material = String(s.material || 'other').toUpperCase();
+        switch (groupBy) {
+            case 'material': return [material, material];
+            case 'brand': return [brand.toLowerCase(), brand];
+            case 'spool': return [null, `${brand}, ${s.color} (${material})`];
+            default: return [`${brand.toLowerCase()}|${material}`, `${brand} ${material}`];
+        }
+    };
+    const spoolGroup = {};
+    for (const [id, s] of Object.entries(state.spools)) {
+        if (!isObject(s)) continue;
+        const [k, label] = keyOf(s);
+        const key = k === null ? id : k;
+        if (!groups.has(key)) {
+            groups.set(key, { key, label, spools: 0, spent: 0, pricedGrams: 0, used: 0, failed: 0, prints: 0, left: 0 });
+        }
+        const g = groups.get(key);
+        g.spools++;
+        if (Number.isFinite(s.price)) { g.spent += s.price; g.pricedGrams += Number(s.startGrams) || 0; }
+        if (!s.archived) g.left += Math.max(0, remainingOf(id, s));
+        spoolGroup[id] = g;
+    }
+    for (const p of Object.values(state.prints)) {
+        if (!isObject(p)) continue;
+        const touched = new Set();
+        for (const u of usageOf(p)) {
+            const g = spoolGroup[u.spoolId];
+            if (!g) continue;
+            const grams = Number(u.grams) || 0;
+            g.used += grams;
+            if (!p.result) g.failed += grams;
+            touched.add(g);
+        }
+        for (const g of touched) g.prints++;
+    }
+    return Array.from(groups.values()).map((g) => {
+        const perKg = g.pricedGrams > 0 ? (g.spent / g.pricedGrams) * 1000 : null;
+        const wastePct = g.used > 0 ? g.failed / g.used : null;
+        const trueKg = perKg !== null && wastePct !== null && wastePct < 1 ? perKg / (1 - wastePct) : null;
+        return { ...g, perKg, wastePct, trueKg };
+    }).sort((a, b) => b.spent - a.spent || a.label.localeCompare(b.label));
+}
+
 /** An AMS unit's own price, or the automatic one for its type: { value, auto, note, url } or null. */
 export function amsUnitPrice(unit) {
     if (Number.isFinite(unit.price)) return { value: unit.price, auto: false };

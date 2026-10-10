@@ -1,9 +1,13 @@
 import { renderAms } from './ams.js';
+import { renderAnalysis } from './analysis.js';
 import { renderDashboard } from './dashboard.js';
 import { renderData } from './data.js';
+import { renderMaterialGuide } from './materials.js';
+import { renderSnapshots } from './snapshotPanel.js';
 import { renderPrints } from './prints.js';
 import { renderQueue } from './queue.js';
-import { renderMaintenanceSettings } from './settings.js';
+import { renderCostCard } from './settingsPrinter.js';
+import { renderUpkeep } from './upkeep.js';
 import { renderSpools } from './spools.js';
 import { h, notify } from './util.js';
 
@@ -23,9 +27,13 @@ export function renderAll() {
     safeRender('prints', renderPrints);
     safeRender('spools', renderSpools);
     safeRender('the AMS', renderAms);
+    safeRender('cost analysis', renderAnalysis);
+    safeRender('the material guide', renderMaterialGuide);
     safeRender('the queue', renderQueue);
     safeRender('data info', renderData);
-    safeRender('maintenance', renderMaintenanceSettings);
+    safeRender('snapshots', renderSnapshots);
+    safeRender('upkeep', renderUpkeep);
+    safeRender('costs', renderCostCard);
 }
 
 export function plural(n, word, pluralWord) {

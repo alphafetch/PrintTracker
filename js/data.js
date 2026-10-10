@@ -3,10 +3,11 @@ import { failReasonLabel, MAX_IMPORT_BYTES, SCHEMA_VERSION } from './constants.j
 import { planCsvImport } from './csv.js';
 import { renderDashboard } from './dashboard.js';
 import { renderAll, safeRender } from './render.js';
-import { syncAllSettings } from './settings.js';
-import { cleanAms, cleanFailReason, cleanMaintenance, cleanProfile, cleanSettings, cleanUi, emptyState, saveState, setState, state } from './state.js';
+import { syncAllSettings } from './settingsKit.js';
+import { takeSnapshot } from './snapshots.js';
+import { cleanAms, cleanParts, cleanFailReason, cleanMaintenance, cleanProfile, cleanSettings, cleanUi, emptyState, normalizeState, saveState, setState, state } from './state.js';
 import { applyTheme } from './theme.js';
-import { $, uid, cleanText, isSafeId, fmtGrams, isHex, isObject, isValidDate, normalizeLink, todayLocal, validMinutes } from './util.js';
+import { $, notify, uid, cleanText, isSafeId, fmtGrams, isHex, isObject, isValidDate, normalizeLink, todayLocal, validMinutes } from './util.js';
 
 // ---------- Data: export, import, clear ----------
 
@@ -182,7 +183,8 @@ export function validateImport(data) {
             theme: data.theme === 'light' || data.theme === 'dark' ? data.theme : null,
             lastExported: typeof data.lastExported === 'string' ? data.lastExported : null,
             ui: cleanUi(data.ui),
-            ams: cleanAms(data.ams, spools)
+            ams: cleanAms(data.ams, spools),
+            parts: cleanParts(data.parts)
         }
     };
 }
@@ -212,7 +214,16 @@ export async function handleImport() {
     );
     if (!ok) return setDataMessage('Import cancelled. Nothing was changed.');
 
-    // Keep this browser's theme choice unless the backup carries one.
+    takeSnapshot('Before import');
+    applyState(incoming);
+    const extra = result.missingRefs > 0
+        ? ` ${result.missingRefs} filament entr${result.missingRefs === 1 ? 'y refers' : 'ies refer'} to spools that are not in the backup.`
+        : '';
+    setDataMessage(`Imported ${Object.keys(state.prints).length} prints, ${Object.keys(state.spools).length} spools and ${Object.keys(state.queue).length} queue items.${extra}`);
+}
+
+/** Make an imported or restored state the current one. Keeps this browser's theme and settings if it carries none. */
+export function applyState(incoming) {
     if (incoming.theme === null) incoming.theme = state.theme;
     if (incoming.settings === null) incoming.settings = state.settings;
     if (incoming.maintenance === null) incoming.maintenance = state.maintenance;
@@ -221,10 +232,6 @@ export async function handleImport() {
     applyTheme();
     syncAllSettings();
     renderAll();
-    const extra = result.missingRefs > 0
-        ? ` ${result.missingRefs} filament entr${result.missingRefs === 1 ? 'y refers' : 'ies refer'} to spools that are not in the backup.`
-        : '';
-    setDataMessage(`Imported ${Object.keys(state.prints).length} prints, ${Object.keys(state.spools).length} spools and ${Object.keys(state.queue).length} queue items.${extra}`);
 }
 
 /** Add the prints in a CSV file to what is already here (nothing is replaced). */
@@ -273,11 +280,22 @@ $('import-csv-button').addEventListener('click', () => importCsvFile.click());
 importCsvFile.addEventListener('change', handleCsvImport);
 $('clear-data-button').addEventListener('click', () => {
     if (!confirm('Delete ALL prints, spools and queue items from this browser? This cannot be undone. Export first if you are unsure.')) return;
+    takeSnapshot('Before delete all');
+    const before = JSON.parse(JSON.stringify(state));
     const { theme, settings } = state;
     setState(emptyState());
     state.theme = theme;
     state.settings = settings;
     saveState();
     renderAll();
-    setDataMessage('All data deleted.');
+    setDataMessage('All data deleted. Undo below, or restore a snapshot.');
+    notify('All data deleted.', {
+        action: {
+            label: 'Undo',
+            onClick: () => {
+                applyState(normalizeState(before));
+                setDataMessage('Your data is back.');
+            }
+        }
+    });
 });

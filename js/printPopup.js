@@ -2,7 +2,6 @@ import { amsLoadedList, amsSlotLabel } from './ams.js';
 import { activeSpools, gramsUsedOfSpool, remainingOf, usageOf } from './calc.js';
 import { FAIL_REASONS } from './constants.js';
 import { renderAll } from './render.js';
-import { spoolPopup } from './spoolPopup.js';
 import { cleanFailReason, cleanProfile, saveState, state } from './state.js';
 import { $, clearError, fmtGrams, h, isObject, isValidDate, makeSwatch, normalizeLink, notify, showError, spoolHex, todayLocal, uid, validMinutes } from './util.js';
 
@@ -44,11 +43,12 @@ export function syncFailField() {
 resultSuccess.addEventListener('change', syncFailField);
 resultFailure.addEventListener('change', syncFailField);
 
+let printReturn = null;   // what had focus before the popup opened
 export let editingPrintId = null;   // null means "create a new print"
 export let pendingQueueId = null;   // queue item to mark done once the print is saved
 
 export function updateBodyLock() {
-    const open = printPopup.style.display === 'block' || spoolPopup.style.display === 'block';
+    const open = Array.from(document.querySelectorAll('.popup')).some((p) => p.style.display === 'block');
     document.body.classList.toggle('modal-open', open);
 }
 
@@ -102,6 +102,7 @@ export function openPrintPopup({ printId = null, copyFromId = null, name = '', l
 
     renderAmsQuick();
     clearError(printError);
+    printReturn = document.activeElement;
     printPopup.style.display = 'block';
     printPopup.scrollTop = 0;
     updateBodyLock();
@@ -110,6 +111,8 @@ export function openPrintPopup({ printId = null, copyFromId = null, name = '', l
 
 export function closePrintPopup() {
     printPopup.style.display = 'none';
+    if (printReturn && typeof printReturn.focus === 'function' && document.contains(printReturn)) printReturn.focus();
+    printReturn = null;
     editingPrintId = null;
     pendingQueueId = null;
     updateBodyLock();

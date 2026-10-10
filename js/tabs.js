@@ -1,5 +1,5 @@
 import { Sections, TABS } from './constants.js';
-import { syncAllSettings } from './settings.js';
+import { syncAllSettings } from './settingsKit.js';
 import { saveState, state } from './state.js';
 import { applyTheme, currentTheme } from './theme.js';
 import { $, h, icon } from './util.js';
@@ -11,6 +11,7 @@ export const sectionEls = {
     [Sections.PRINTS]: $('prints'),
     [Sections.FILA]: $('filament'),
     [Sections.QUEUE]: $('queue'),
+    [Sections.UPKEEP]: $('upkeep'),
     [Sections.DATA]: $('data'),
     [Sections.SETTINGS]: $('settings')
 };

@@ -20,6 +20,23 @@ export function unloadSpool(spoolId) {
     for (const u of Object.values(state.ams)) u.slots = u.slots.map((id) => (id === spoolId ? '' : id));
 }
 
+/** Where a spool is loaded: [{ unitId, index }]. Used to put it back after an undo. */
+export function slotsHolding(spoolId) {
+    const out = [];
+    for (const [unitId, u] of Object.entries(state.ams)) {
+        u.slots.forEach((id, index) => { if (id === spoolId) out.push({ unitId, index }); });
+    }
+    return out;
+}
+
+/** Put a spool back into the slots it came from (only if they are still empty). */
+export function restoreSlots(spoolId, places) {
+    for (const { unitId, index } of places) {
+        const u = state.ams[unitId];
+        if (u && u.slots[index] === '') u.slots[index] = spoolId;
+    }
+}
+
 /** "AMS 1, slot 2" for a loaded spool, or '' when it is not in an AMS. */
 export function amsSlotLabel(spoolId) {
     for (const u of Object.values(state.ams)) {

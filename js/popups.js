@@ -1,4 +1,5 @@
 import { Sections, TABS } from './constants.js';
+import { closeLabelPopup, labelPopupEl, labelPopupOpen } from './labels.js';
 import { closePrintPopup, openPrintPopup, printPopup } from './printPopup.js';
 import { printSearch } from './prints.js';
 import { openSettings } from './settings.js';
@@ -31,9 +32,11 @@ export function setupPopups() {
         if (e.key === 'Escape') {
             closePrintPopup();
             closeSpoolPopup();
+            closeLabelPopup();
         } else if (e.key === 'Tab') {
             if (printPopup.style.display === 'block') trapFocus(printPopup, e);
             else if (spoolPopup.style.display === 'block') trapFocus(spoolPopup, e);
+            else if (labelPopupOpen()) trapFocus(labelPopupEl(), e);
         } else {
             handleShortcut(e);
         }
@@ -41,7 +44,7 @@ export function setupPopups() {
 }
 
 export const SHORTCUTS = [
-    ['1 - 6', 'Switch tabs'],
+    ['1 - 7', 'Switch tabs'],
     ['N', 'New print'],
     ['S', 'Add a spool'],
     ['/', 'Search prints'],
@@ -51,12 +54,12 @@ export const SHORTCUTS = [
 
 export function handleShortcut(e) {
     if (!state.settings.shortcuts || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (printPopup.style.display === 'block' || spoolPopup.style.display === 'block') return;
+    if (printPopup.style.display === 'block' || spoolPopup.style.display === 'block' || labelPopupOpen()) return;
     const tag = e.target && e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
 
     const key = e.key.toLowerCase();
-    const tabIndex = '123456'.indexOf(key);
+    const tabIndex = '1234567'.indexOf(key);
     if (key.length === 1 && tabIndex !== -1) {
         showTab(TABS[tabIndex].section);
     } else if (key === 'n') {

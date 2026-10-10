@@ -15,6 +15,7 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400..700&family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <a class="skip-link" href="#app" id="skip-link">Skip to content</a>
     <div id="bg" class="bgp-layers" aria-hidden="true">
         <span class="bg-blob b1"></span>
         <span class="bg-blob b2"></span>
@@ -31,7 +32,7 @@
         </div>
     </div>
 
-    <main id="app">
+    <main id="app" tabindex="-1">
         <section id="dashboard" class="section" aria-labelledby="dash-title">
             <div class="page-head">
                 <div>
@@ -96,6 +97,8 @@
             </div>
             <div id="ams" class="ams-section"></div>
             <div id="spools" class="card-list spool-grid"></div>
+            <div id="spool-analysis"></div>
+            <div id="material-guide"></div>
         </section>
 
         <section id="queue" class="section" aria-labelledby="queue-title">
@@ -119,6 +122,16 @@
             </div>
         </section>
 
+        <section id="upkeep" class="section" aria-labelledby="upkeep-title">
+            <div class="page-head">
+                <div>
+                    <h2 id="upkeep-title" class="page-title">Upkeep</h2>
+                    <p class="page-sub" id="upkeep-sub">Printer hours, parts that wear out, and maintenance reminders.</p>
+                </div>
+            </div>
+            <div id="upkeep-content"></div>
+        </section>
+
         <section id="data" class="section" aria-labelledby="data-title">
             <div class="page-head">
                 <div>
@@ -134,12 +147,13 @@
                     <button type="button" id="import-button" class="btn btn-outline">Import JSON</button>
                     <button type="button" id="export-csv-button" class="btn btn-outline">Export prints (CSV)</button>
                     <button type="button" id="import-csv-button" class="btn btn-outline">Import prints (CSV)</button>
-                    <input type="file" id="import-file" accept="application/json,.json" hidden>
-                    <input type="file" id="import-csv-file" accept="text/csv,.csv,text/plain" hidden>
+                    <input type="file" id="import-file" accept="application/json,.json" aria-label="Choose a backup file to import" hidden>
+                    <input type="file" id="import-csv-file" accept="text/csv,.csv,text/plain" aria-label="Choose a CSV file to import" hidden>
                 </div>
                 <p id="data-message" class="body-text" role="status" hidden></p>
                 <p class="body-text secondary-text small">Everything is saved only in this browser. Clearing site data or switching browsers erases it, so export a backup now and then. Importing JSON replaces all current data. Importing a CSV only adds prints; it skips ones you already have and never changes the rest.</p>
             </div>
+            <div class="panel" id="snapshot-panel"></div>
             <div class="panel panel-danger">
                 <h3 class="panel-title">Danger zone</h3>
                 <p class="body-text secondary-text">Permanently removes every print, spool, queue item and upkeep task from this browser. Your settings are kept.</p>

@@ -1,5 +1,7 @@
 import { daysOpen, gramsUsedOfSpool, lowFraction, needsDrying, printsUsingSpool, remainingOf, warnFraction } from './calc.js';
-import { unloadSpool } from './ams.js';
+import { restoreSlots, slotsHolding, unloadSpool } from './ams.js';
+import { dryingAdvice } from './catalog.js';
+import { setupLabelsButton } from './labels.js';
 import { emptyState_, makeBadge, plural, renderAll } from './render.js';
 import { openSpoolPopup } from './spoolPopup.js';
 import { saveState, state } from './state.js';
@@ -19,6 +21,7 @@ export function setupSpoolToolbar() {
     plus.appendChild(h('span', 'btn-text', 'Add spool'));
     plus.addEventListener('click', () => openSpoolPopup());
     $('fila-actions').appendChild(plus);
+    setupLabelsButton($('fila-actions'));
 
     archiveOffBox.addEventListener('change', () => {
         state.hideArchived = archiveOffBox.checked;
@@ -91,7 +94,7 @@ export function buildSpoolCard(id, s) {
     }
     if (needsDrying(id, s)) {
         const b = makeBadge('Needs drying?', 'amber');
-        b.title = 'Open for a while without being dried. Plastics like PETG, nylon and TPU soak up moisture.';
+        b.title = ['Open for a while without being dried.', dryingAdvice(materialKey(s))].filter(Boolean).join(' ');
         badges.appendChild(b);
     }
     heading.appendChild(badges);
@@ -134,7 +137,8 @@ export function buildSpoolCard(id, s) {
         const dried = isValidDate(s.driedDate);
         if (dried || days !== null) {
             card.appendChild(h('div', 'card-meta card-meta-soft dry-line',
-                dried ? `Dried ${formatDate(s.driedDate)} (${plural(days, 'day')} ago)` : `Open for ${plural(days, 'day')}, never dried`));
+                (dried ? `Dried ${formatDate(s.driedDate)} (${plural(days, 'day')} ago)` : `Open for ${plural(days, 'day')}, never dried`) +
+                (needsDrying(id, s) && dryingAdvice(materialKey(s)) ? `. ${dryingAdvice(materialKey(s))}` : '')));
         }
     }
 
@@ -149,12 +153,7 @@ export function buildSpoolCard(id, s) {
         const dry = h('button', 'btn btn-outline btn-small', 'Dried today');
         dry.type = 'button';
         dry.title = 'Log that you dried this spool today';
-        dry.addEventListener('click', () => {
-            s.driedDate = todayLocal();
-            saveState();
-            renderAll();
-            notify(`Logged: ${s.brand}, ${s.color} was dried today.`);
-        });
+        dry.addEventListener('click', () => markDried(id));
         buttons.appendChild(dry);
     }
 
@@ -179,13 +178,40 @@ export function buildSpoolCard(id, s) {
     return card;
 }
 
+/** Log that a spool was dried today (with Undo). */
+export function markDried(id) {
+    const s = state.spools[id];
+    if (!s) return;
+    const before = s.driedDate;
+    s.driedDate = todayLocal();
+    saveState();
+    renderAll();
+    notify(`Logged: ${s.brand}, ${s.color} was dried today.`, {
+        action: { label: 'Undo', onClick: () => { s.driedDate = before; saveState(); renderAll(); } }
+    });
+}
+
 export function archiveSpool(id) {
     const spool = state.spools[id];
     if (!spool) return;
-    spool.archived = !spool.archived;
+    const was = Boolean(spool.archived);
+    const places = slotsHolding(id);
+    spool.archived = !was;
     if (spool.archived) unloadSpool(id);
     saveState();
     renderAll();
+    notify(`${spool.archived ? 'Archived' : 'Restored'} "${spool.brand}, ${spool.color}".`, {
+        action: {
+            label: 'Undo',
+            onClick: () => {
+                if (!state.spools[id]) return;
+                state.spools[id].archived = was;
+                if (!was) restoreSlots(id, places);
+                saveState();
+                renderAll();
+            }
+        }
+    });
 }
 
 export function deleteSpool(id) {
@@ -196,9 +222,20 @@ export function deleteSpool(id) {
         alert(`This spool is used in ${uses} print${uses === 1 ? '' : 's'}. Archive it instead.`);
         return;
     }
-    if (!confirm(`Delete this spool?: "${spool.brand}, ${spool.color}" This cannot be undone.`)) return;
+    const places = slotsHolding(id);
     delete state.spools[id];
     unloadSpool(id);
     saveState();
     renderAll();
+    notify(`Deleted "${spool.brand}, ${spool.color}".`, {
+        action: {
+            label: 'Undo',
+            onClick: () => {
+                state.spools[id] = spool;
+                restoreSlots(id, places);
+                saveState();
+                renderAll();
+            }
+        }
+    });
 }

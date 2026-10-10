@@ -1,5 +1,5 @@
 import { AMS_TYPES, BRANDS, brandOfLegacyModel, findPrinter } from './catalog.js';
-import { ACCENTS, BACKGROUNDS, CORRUPT_KEY, CURRENCIES, DATE_FORMATS, FAIL_REASONS, RANGES, KNOWN_MATERIALS, NOZZLES, SCHEMA_VERSION, SETTINGS_VERSION, STORAGE_KEY, UNIT_LABELS } from './constants.js';
+import { ACCENTS, BACKGROUNDS, CORRUPT_KEY, CURRENCIES, DATE_FORMATS, ANALYSIS_GROUPS, FAIL_REASONS, RANGES, KNOWN_MATERIALS, NOZZLES, SCHEMA_VERSION, SETTINGS_VERSION, STORAGE_KEY, UNIT_LABELS } from './constants.js';
 import { clampNum, cleanText, isObject, isSafeId, isValidDate, notify, todayLocal } from './util.js';
 
 // ---------- State and storage ----------
@@ -148,12 +148,39 @@ export function cleanAms(raw, spools) {
     return out;
 }
 
+/** Wear parts (nozzle, build plate...): { id: { name, lastDate, atHours, lifespan|null, price|null } }. */
+export function cleanParts(raw) {
+    const out = {};
+    if (!isObject(raw)) return out;
+    for (const [id, p] of Object.entries(raw).slice(0, 30)) {
+        if (!isSafeId(id) || !isObject(p)) continue;
+        const name = cleanText(p.name, 40);
+        if (name === '') continue;
+        const num = (v, max, digits) => {
+            if (v === null || v === undefined || v === '') return null;
+            const n = Number(v);
+            if (!Number.isFinite(n) || n <= 0) return null;
+            const f = Math.pow(10, digits);
+            return Math.round(Math.min(n, max) * f) / f;
+        };
+        out[id] = {
+            name,
+            lastDate: isValidDate(p.lastDate) ? p.lastDate : todayLocal(),
+            atHours: clampNum(p.atHours, 0, 10000000, 0),
+            lifespan: num(p.lifespan, 100000, 1),
+            price: num(p.price, 10000000, 2)
+        };
+    }
+    return out;
+}
+
 export function cleanUi(raw) {
     const u = isObject(raw) ? raw : {};
     const when = typeof u.backupDismissedAt === 'string' ? new Date(u.backupDismissedAt) : null;
     return {
         backupDismissedAt: when && !Number.isNaN(when.getTime()) ? when.toISOString() : null,
-        range: RANGES.some(([k]) => k === u.range) ? u.range : 'all'
+        range: RANGES.some(([k]) => k === u.range) ? u.range : 'all',
+        analysisGroup: ANALYSIS_GROUPS.some(([k]) => k === u.analysisGroup) ? u.analysisGroup : 'brand-material'
     };
 }
 
@@ -184,8 +211,9 @@ export function emptyState() {
         hideArchived: false,
         theme: null,
         lastExported: null,
-        ui: { backupDismissedAt: null, range: 'all' },
-        ams: {}
+        ui: { backupDismissedAt: null, range: 'all', analysisGroup: 'brand-material' },
+        ams: {},
+        parts: {}
     };
 }
 
@@ -202,7 +230,8 @@ export function normalizeState(data) {
         theme: s.theme === 'light' || s.theme === 'dark' ? s.theme : null,
         lastExported: typeof s.lastExported === 'string' ? s.lastExported : null,
         ui: cleanUi(s.ui),
-        ams: cleanAms(s.ams, isObject(s.spools) ? s.spools : {})
+        ams: cleanAms(s.ams, isObject(s.spools) ? s.spools : {}),
+        parts: cleanParts(s.parts)
     };
 }
 
