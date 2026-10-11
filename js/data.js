@@ -6,6 +6,7 @@ import { renderAll, safeRender } from './render.js';
 import { syncAllSettings } from './settingsKit.js';
 import { takeSnapshot } from './snapshots.js';
 import { renderAutoBackup } from './autoBackup.js';
+import { renderDataCheck } from './check.js';
 import { cleanAms, cleanParts, cleanRunning, cleanFailReason, cleanMaintenance, cleanPrinterId, cleanProfile, cleanQueueSpec, cleanTags, cleanSettings, cleanUi, emptyState, normalizeState, saveState, setState, state } from './state.js';
 import { applyTheme } from './theme.js';
 import { $, notify, uid, cleanText, isSafeId, fmtGrams, isHex, isObject, isValidDate, normalizeLink, todayLocal, validMinutes } from './util.js';
@@ -24,6 +25,7 @@ export function setDataMessage(text, isError = false) {
 
 export function renderData() {
     renderAutoBackup();
+    renderDataCheck();
     const prints = Object.keys(state.prints).length;
     const spools = Object.keys(state.spools).length;
     const queued = Object.keys(state.queue).length;

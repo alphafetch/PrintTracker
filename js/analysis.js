@@ -1,4 +1,4 @@
-import { failureGroups, hasManyPrinters, leftoverSpools, MIN_FAILURE_SAMPLE, spoolCostGroups } from './calc.js';
+import { failureGroups, hasManyPrinters, leftoverSpools, MIN_FAILURE_SAMPLE, MIN_SETTINGS_SAMPLE, settingsThatWorked, spoolCostGroups } from './calc.js';
 import { ANALYSIS_GROUPS } from './constants.js';
 import { archiveSpool } from './spools.js';
 import { saveState, state } from './state.js';
@@ -84,6 +84,8 @@ export function renderAnalysis() {
     panel.appendChild(h('p', 'secondary-text small', 'Failure shares from only a few prints are rough. Archived and used-up spools count too.'));
     root.appendChild(panel);
     root.appendChild(buildFailureRatePanel());
+    const worked = buildSettingsPanel();
+    if (worked) root.appendChild(worked);
     root.appendChild(buildLeftoverPanel());
 }
 
@@ -192,5 +194,46 @@ export function buildFailureRatePanel() {
         note.textContent = `Not enough prints yet to compare: you need ${MIN_FAILURE_SAMPLE} or more prints in at least two groups.`;
     }
     panel.appendChild(note);
+    return panel;
+}
+
+/** Which layer height, infill and supports have worked for each material. Hidden until a combination has enough prints. */
+export function buildSettingsPanel() {
+    const groups = settingsThatWorked();
+    if (groups.length === 0) return null;
+    const panel = h('div', 'panel settings-worked-panel');
+    panel.id = 'settings-worked-panel';
+    panel.appendChild(h('h3', 'panel-title', 'Settings that worked'));
+    panel.appendChild(h('p', 'secondary-text small',
+        `Built from the layer height, infill and supports you note on prints. Only combinations used on ${MIN_SETTINGS_SAMPLE} or more prints of the same material are shown, and a print counts under the material it used the most of.`));
+    for (const g of groups) {
+        const wrap = h('div', 'table-scroll');
+        const table = h('table', 'data-table');
+        table.dataset.material = g.material;
+        const cap = h('caption', 'table-caption', g.material);
+        table.appendChild(cap);
+        const head = h('tr');
+        for (const text of ['Settings', 'Prints', 'Worked']) {
+            const th = h('th', text === 'Settings' ? null : 'num', text);
+            th.scope = 'col';
+            head.appendChild(th);
+        }
+        table.appendChild(h('thead')).appendChild(head);
+        const body = h('tbody');
+        for (const c of g.combos) {
+            const tr = h('tr');
+            const name = h('th', 'row-head', c.label);
+            name.scope = 'row';
+            tr.append(name, h('td', 'num', String(c.count)), h('td', 'num', `${c.succeeded} (${Math.round(c.rate * 100)}%)`));
+            body.appendChild(tr);
+        }
+        table.appendChild(body);
+        wrap.appendChild(table);
+        panel.appendChild(wrap);
+        const best = g.combos[0];
+        const note = h('p', 'panel-total-line', `${g.material}: ${best.label} worked ${best.succeeded} of ${best.count} times (${Math.round(best.rate * 100)}%).`);
+        note.dataset.material = g.material;
+        panel.appendChild(note);
+    }
     return panel;
 }

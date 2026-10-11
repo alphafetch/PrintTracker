@@ -1,5 +1,5 @@
 import { AMS_TYPES, BRANDS, brandOfLegacyModel, findPrinter } from './catalog.js';
-import { ACCENTS, BACKGROUNDS, CORRUPT_KEY, CURRENCIES, DATE_FORMATS, ANALYSIS_GROUPS, FAIL_REASONS, RANGES, KNOWN_MATERIALS, MAX_EXTRA_PRINTERS, NOZZLES, SCHEMA_VERSION, SETTINGS_VERSION, STORAGE_KEY, UNIT_LABELS } from './constants.js';
+import { ACCENTS, BACKGROUNDS, CORRUPT_KEY, CURRENCIES, DATE_FORMATS, ANALYSIS_GROUPS, DASH_ACHIEVEMENTS, DASH_PANELS, FAIL_REASONS, RANGES, KNOWN_MATERIALS, MAX_EXTRA_PRINTERS, NOZZLES, SCHEMA_VERSION, SETTINGS_VERSION, STORAGE_KEY, UNIT_LABELS } from './constants.js';
 import { clampNum, cleanText, isObject, isSafeId, isValidDate, normalizeLink, notify, todayLocal, validMinutes } from './util.js';
 
 // ---------- State and storage ----------
@@ -199,6 +199,17 @@ export function cleanParts(raw, printers = {}) {
     return out;
 }
 
+/** A list of dashboard panel keys, keeping only known ones once each. */
+function knownPanels(raw, allowAchievements) {
+    const known = new Set(DASH_PANELS.map(([k]) => k));
+    if (allowAchievements) known.add(DASH_ACHIEVEMENTS);
+    const out = [];
+    for (const k of Array.isArray(raw) ? raw : []) {
+        if (typeof k === 'string' && known.has(k) && !out.includes(k)) out.push(k);
+    }
+    return out;
+}
+
 export function cleanUi(raw, hasData = false) {
     const u = isObject(raw) ? raw : {};
     const when = typeof u.backupDismissedAt === 'string' ? new Date(u.backupDismissedAt) : null;
@@ -207,7 +218,10 @@ export function cleanUi(raw, hasData = false) {
         range: RANGES.some(([k]) => k === u.range) ? u.range : 'all',
         analysisGroup: ANALYSIS_GROUPS.some(([k]) => k === u.analysisGroup) ? u.analysisGroup : 'brand-material',
         // Someone with data already does not need the getting-started guide unless they ask for it.
-        guideDismissed: typeof u.guideDismissed === 'boolean' ? u.guideDismissed : hasData
+        guideDismissed: typeof u.guideDismissed === 'boolean' ? u.guideDismissed : hasData,
+        groupByLocation: u.groupByLocation === true,
+        dashHidden: knownPanels(u.dashHidden, true),
+        dashOrder: knownPanels(u.dashOrder, false)
     };
 }
 
@@ -314,7 +328,7 @@ export function emptyState() {
         hideArchived: false,
         theme: null,
         lastExported: null,
-        ui: { backupDismissedAt: null, range: 'all', analysisGroup: 'brand-material', guideDismissed: false },
+        ui: { backupDismissedAt: null, range: 'all', analysisGroup: 'brand-material', guideDismissed: false, groupByLocation: false, dashHidden: [], dashOrder: [] },
         ams: {},
         parts: {},
         running: {}

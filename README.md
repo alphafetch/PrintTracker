@@ -39,6 +39,12 @@ A personal 3D print and filament tracker for Bambu Lab, FlashForge and ELEGOO pr
 - **Price history:** the spool popup says what you paid last time for the same brand, material and colour, and a spool card compares its price per kg with the previous purchase.
 - **Prints with this spool:** a "Show prints" button on each spool card filters the Prints tab to prints that used it.
 - **Drop a slicer file:** drag a `.gcode` or `.gcode.3mf` onto the page and the print form opens already filled in.
+- **Customize the dashboard:** the Customize button next to Summary lets you hide panels or move them up and down (Reset puts them back). Running timers, warnings and the stat cards always show. It is remembered and included in backups.
+- **Most-printed models:** a dashboard panel grouping prints by name (ignoring case and extra spaces) for anything printed twice or more, with success rate, grams, time, cost and a Print again button.
+- **Merge JSON:** on the Data tab, adds the prints, spools and queue items from another backup (a friend's, or your other browser) without replacing anything. Spools that match one you have (brand, material, colour, date, weight, price) are not copied and their prints use yours; matching prints and queue items are skipped; clashing ids get new ones. It asks first, takes a snapshot and offers Undo. Settings, AMS, upkeep and timers from the other backup are not merged.
+- **Spools by location:** once a spool has a storage location, the Filament tab gets a location filter (including "No location") and a Group by location view.
+- **Data check:** the Data tab can look for prints that use deleted spools, spools logged past their weight, archived spools still in the AMS, prints with no filament or a future date, and exact duplicate prints. Each has one fix or an Edit/Re-weigh shortcut, and fixes can be undone.
+- **Settings that worked:** on the Filament tab, how often each layer height, infill and supports combination succeeded per material (a print counts under the material it used the most of; only combinations with 3 or more prints are shown, and "0.2" and "0.2 mm" count as the same).
 - **Undo and snapshots:** deleting a spool, archiving, clearing the queue, deleting all data and resetting settings can all be undone from the toast. The last 5 versions of your data are also kept in this browser (daily, and before an import or delete-all) and can be restored from the Data tab. They are not a real backup.
 - **Accessibility:** skip link, keyboard navigation for tabs and popups, focus returns after popups close, visible focus, and text contrast of at least 4.5:1 in both themes and every accent.
 - **Achievements:** 44 of them in seven groups, with progress bars and silly names.
@@ -112,6 +118,9 @@ js/bulk.js        select several prints
 js/guide.js       getting-started checklist
 js/autoBackup.js  automatic backup to a folder
 js/leftover.js    ask how much is left when archiving a spool
+js/customize.js   show, hide and reorder dashboard panels
+js/merge.js       merge another backup into this one
+js/check.js       data check with fixes
 js/snapshots.js  js/snapshotPanel.js
 js/popups.js
 ```

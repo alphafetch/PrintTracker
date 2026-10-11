@@ -93,6 +93,13 @@
                     <option value="tpu">TPU</option>
                     <option value="other">Other</option>
                 </select>
+                <span id="location-tools" class="location-tools" hidden>
+                    <select id="spool-location-filter" class="dropdown" aria-label="Filter by storage location"></select>
+                    <label for="group-location-checkbox" class="check-label">
+                        <input type="checkbox" class="check-input" id="group-location-checkbox">
+                        <span>Group by location</span>
+                    </label>
+                </span>
                 <label for="archive-off-checkbox" class="check-label">
                     <input type="checkbox" class="check-input" name="hide-archived" id="archive-off-checkbox">
                     <span>Hide archived</span>
@@ -150,15 +157,18 @@
                 <div class="data-actions">
                     <button type="button" id="export-button" class="btn btn-primary">Export JSON</button>
                     <button type="button" id="import-button" class="btn btn-outline">Import JSON</button>
+                    <button type="button" id="merge-button" class="btn btn-outline" title="Add the prints, spools and queue items from another backup without replacing anything">Merge JSON</button>
                     <button type="button" id="export-csv-button" class="btn btn-outline">Export prints (CSV)</button>
                     <button type="button" id="import-csv-button" class="btn btn-outline">Import prints (CSV)</button>
                     <input type="file" id="import-file" accept="application/json,.json" aria-label="Choose a backup file to import" hidden>
+                    <input type="file" id="merge-file" accept="application/json,.json" aria-label="Choose a backup file to merge in" hidden>
                     <input type="file" id="import-csv-file" accept="text/csv,.csv,text/plain" aria-label="Choose a CSV file to import" hidden>
                 </div>
                 <p id="data-message" class="body-text" role="status" hidden></p>
-                <p class="body-text secondary-text small">Everything is saved only in this browser. Clearing site data or switching browsers erases it, so export a backup now and then. Importing JSON replaces all current data. Importing a CSV only adds prints; it skips ones you already have and never changes the rest.</p>
+                <p class="body-text secondary-text small">Everything is saved only in this browser. Clearing site data or switching browsers erases it, so export a backup now and then. Importing JSON replaces all current data; Merge JSON adds only what is new from another backup and skips duplicates. Importing a CSV only adds prints; it skips ones you already have and never changes the rest.</p>
             </div>
             <div class="panel" id="auto-backup-panel"></div>
+            <div class="panel" id="data-check-panel"></div>
             <div class="panel" id="snapshot-panel"></div>
             <div class="panel panel-danger">
                 <h3 class="panel-title">Danger zone</h3>

@@ -1455,3 +1455,26 @@ html[data-density="compact"] .page-head { margin-bottom: 12px; }
 .drop-overlay[hidden] { display: none; }
 .leftover-panel .list-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
 .leftover-panel .list-text { display: grid; gap: 2px; min-width: 0; }
+
+/* Customize dashboard */
+.customize-popup-content { max-width: 520px; }
+.customize-list { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 4px; }
+.customize-row { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px solid var(--border); }
+.customize-check { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; cursor: pointer; overflow-wrap: anywhere; }
+.customize-check input { width: 18px; height: 18px; flex: none; }
+
+/* Spools by storage location */
+.location-tools { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.spool-group-heading { grid-column: 1 / -1; margin: 12px 0 0; font-size: 1rem; overflow-wrap: anywhere; }
+.spool-group-heading:first-child { margin-top: 0; }
+
+/* Data check */
+.check-results { margin-top: 12px; }
+.check-results:focus { outline: none; }
+.check-row { gap: 12px; align-items: center; }
+.check-text { overflow-wrap: anywhere; }
+.check-ok { font-weight: 600; }
+
+/* Settings that worked */
+.settings-worked-panel { margin-top: 16px; }
+.table-caption { text-align: left; font-weight: 700; padding: 8px 0 4px; caption-side: top; }

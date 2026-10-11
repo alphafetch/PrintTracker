@@ -3327,6 +3327,308 @@ const msg = () => q(w, '#data-message').textContent;
         check('no unexpected errors in section 53', errors.length === e, errors.slice(e).join(' | '));
     }
 
+    console.log('\n[54] Customize dashboard and most-printed models');
+    {
+        const e = errors.length;
+        const w = boot();
+        addSpool(w, { brand: 'Bambu Lab', color: 'Black', grams: '1000', price: '20', date: '2026-09-01' });
+        openPrint(w); fillPrint(w, { name: 'Phone stand', rows: [{ spoolIndex: 0, grams: 40 }] }); savePrint(w);
+        check('one print of a model does not make a most-printed panel', !q(w, '#most-printed-panel'));
+        openPrint(w); fillPrint(w, { name: '  phone   STAND ', date: '2026-10-07', rows: [{ spoolIndex: 0, grams: 50 }] }); savePrint(w);
+        openPrint(w); fillPrint(w, { name: 'Phone stand', date: '2026-10-06', success: false, rows: [{ spoolIndex: 0, grams: 10 }] }); savePrint(w);
+        openPrint(w); fillPrint(w, { name: 'Vase', rows: [{ spoolIndex: 0, grams: 30 }] }); savePrint(w);
+        click(w, q(w, '#dash-button'));
+        let panel = q(w, '#most-printed-panel');
+        check('names are grouped ignoring case and spaces', !!panel && qa(w, '.list-row', panel).length === 1, panel && panel.textContent);
+        check('shows count, success rate and total grams', panel.textContent.includes('3x') && panel.textContent.includes('67% succeeded') && panel.textContent.includes('100g total'), panel.textContent);
+        click(w, byText(w, 'button', 'Print again', panel));
+        check('Print again opens a new print filled from the latest one', q(w, '#name-tinput').value.replace(/\s+/g, ' ').trim().toLowerCase() === 'phone stand' && q(w, '#print-popup').style.display === 'block' && qa(w, '.filament-row').length === 1 && q(w, '#print-popup-title').textContent === 'Create Print');
+        w.document.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape' }));
+
+        // Customize
+        click(w, q(w, '#customize-button'));
+        const pop = q(w, '#customize-popup');
+        check('Customize opens a dialog with every panel', pop.style.display === 'block' && qa(w, '#customize-list input').length === 10, String(qa(w, '#customize-list input').length));
+        const key = (k) => q(w, `#customize-list [data-key="${k}"]`);
+        const order = () => qa(w, '#dashboard-content .dash-grid > .panel').map((p) => p.querySelector('.panel-title').textContent);
+        check('default order starts with filament by material, most-printed before recent', order().indexOf('Most-printed models') < order().indexOf('Recent prints'), order().join('|'));
+        check('first Up button is disabled and last Down is disabled', key('printer').querySelector('.dash-up').disabled && key('upNext').querySelector('.dash-down').disabled);
+        click(w, key('recent').querySelector('.dash-up'));
+        check('Up moves a panel above its neighbour on the dashboard', order().indexOf('Recent prints') < order().indexOf('Most-printed models'), order().join('|'));
+        check('the order is saved', stored(w).ui.dashOrder.indexOf('recent') < stored(w).ui.dashOrder.indexOf('mostPrinted'), JSON.stringify(stored(w).ui));
+        check('focus stays on the button that was used', w.document.activeElement === key('recent').querySelector('.dash-up'));
+        const box = key('mostPrinted').querySelector('input');
+        box.checked = false; box.dispatchEvent(new w.Event('change', { bubbles: true }));
+        check('unticking hides the panel and remembers it', !q(w, '#most-printed-panel') && stored(w).ui.dashHidden.includes('mostPrinted'));
+        const ach = key('achievements').querySelector('input');
+        ach.checked = false; ach.dispatchEvent(new w.Event('change', { bubbles: true }));
+        check('achievements can be hidden', !q(w, '#achievements') && stored(w).ui.dashHidden.includes('achievements'));
+        check('Customize closes with Escape', (w.document.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape' })), q(w, '#customize-popup').style.display === 'none'));
+
+        // survives a reload
+        const w2 = boot(JSON.stringify(stored(w)));
+        click(w2, q(w2, '#dash-button'));
+        check('hidden panels and order survive a reload', !q(w2, '#most-printed-panel') && qa(w2, '#dashboard-content .dash-grid > .panel').map((p) => p.querySelector('.panel-title').textContent).indexOf('Recent prints') >= 0);
+        click(w2, q(w2, '#customize-button'));
+        click(w2, q(w2, '#customize-reset'));
+        check('Reset to default shows everything again in default order', !!q(w2, '#most-printed-panel') && stored(w2).ui.dashHidden.length === 0 && stored(w2).ui.dashOrder.length === 0);
+
+        // import validation
+        const bad = JSON.parse(JSON.stringify(stored(w2)));
+        bad.ui.dashHidden = ['spend', 'spend', 'nope', 5, 'achievements'];
+        bad.ui.dashOrder = ['upNext', 'zzz', 'upNext', 'achievements', 'printer'];
+        const w3 = boot(JSON.stringify(bad));
+        click(w3, q(w3, '#dash-button'));
+        check('a loaded file with odd panel lists still shows the dashboard', !!q(w3, '#dashboard-content .dash-grid') && !q(w3, '#spend-panel') && !q(w3, '#achievements'));
+        const firstTitles = qa(w3, '#dashboard-content .dash-grid > .panel').map((p) => p.querySelector('.panel-title').textContent);
+        check('the order from a loaded file puts Up next first and ignores junk', firstTitles[0] === 'Up next' || !firstTitles.includes('Up next'), firstTitles.join('|'));
+        click(w3, q(w3, '#customize-button')); click(w3, q(w3, '#customize-done'));
+        click(w3, q(w3, '#customize-button'));
+        const sw = q(w3, '#customize-list [data-key="printer"] input'); sw.checked = false; sw.dispatchEvent(new w3.Event('change', { bubbles: true }));
+        const clean = stored(w3).ui;
+        check('junk, repeats and non-text entries are removed once saved', JSON.stringify(clean.dashHidden) === JSON.stringify(['spend', 'achievements', 'printer']) && clean.dashOrder.join() === 'upNext,printer', JSON.stringify(clean));
+        check('no unexpected errors in section 54', errors.length === e, errors.slice(e).join(' | '));
+    }
+
+    console.log('\n[55] Merge import');
+    {
+        const e = errors.length;
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        const merge = async (w, obj) => {
+            const input = q(w, '#merge-file');
+            Object.defineProperty(input, 'files', { value: [new w.File([typeof obj === 'string' ? obj : JSON.stringify(obj)], 'm.json')], configurable: true });
+            input.dispatchEvent(new w.Event('change', { bubbles: true }));
+            await wait(150);
+        };
+        const w = boot();
+        addSpool(w, { brand: 'Bambu Lab', color: 'Black', grams: '1000', price: '20', date: '2026-09-01' });
+        openPrint(w); fillPrint(w, { name: 'Benchy', rows: [{ spoolIndex: 0, grams: 15 }] }); savePrint(w);
+        const mine = stored(w);
+        const mineSpool = Object.keys(mine.spools)[0];
+
+        // the other backup: same spool and print, plus a new spool, a new print on each, a queue item
+        const other = JSON.parse(JSON.stringify(mine));
+        other.spools.friend1 = { brand: 'Sunlu', material: 'pla', color: 'White', startGrams: 1000, price: 12, date: '2026-09-05' };
+        other.prints.fp1 = { name: 'Vase', date: '2026-10-02', result: true, usage: [{ spoolId: 'friend1', grams: 40 }] };
+        other.prints.fp2 = { name: 'Clip', date: '2026-10-03', result: true, usage: [{ spoolId: mineSpool, grams: 5 }] };
+        other.queue = { fq1: { name: 'Gear', link: 'https://example.com/gear' } };
+        other.settings = { currency: 'EUR' };
+
+        w.__confirms.length = 0;
+        await merge(w, other);
+        check('merge asks first, naming what will be added and skipped', w.__confirms.length === 1 && w.__confirms[0].includes('2 prints, 1 spool and 1 queue item') && w.__confirms[0].includes('1 print, 1 spool'), w.__confirms.join('|'));
+        const after = stored(w);
+        check('new prints, spools and queue items are added', Object.keys(after.prints).length === 3 && Object.keys(after.spools).length === 2 && Object.keys(after.queue).length === 1, JSON.stringify([Object.keys(after.prints).length, Object.keys(after.spools).length]));
+        check('a duplicate spool is not copied and its prints use yours', Object.values(after.prints).find((p) => p.name === 'Clip').usage[0].spoolId === mineSpool);
+        check('your settings are not replaced', after.settings.currency === mine.settings.currency, after.settings.currency);
+        check('a snapshot was taken and a result is shown', q(w, '#data-message').textContent.includes('Added 2 prints, 1 spool and 1 queue item') && q(w, '#data-message').textContent.includes('Skipped 2'), q(w, '#data-message').textContent);
+        click(w, q(w, '#fila-button'));
+        check('grams left reflect the merged prints (1000 - 15 - 5 = 980)', qa(w, '#spools .spool-card').some((c) => c.textContent.includes('Bambu Lab') && c.textContent.includes('980')), qa(w, '#spools .spool-card')[0].textContent);
+
+        // merging the same file again adds nothing
+        await merge(w, other);
+        check('merging again finds nothing new', Object.keys(stored(w).prints).length === 3 && q(w, '#data-message').textContent.startsWith('Nothing new'), q(w, '#data-message').textContent);
+
+        // Undo
+        const w2 = boot(JSON.stringify(mine));
+        await merge(w2, other);
+        check('merge changed things before the undo', Object.keys(stored(w2).prints).length === 3);
+        click(w2, byText(w2, 'button', 'Undo', q(w2, '#toast')));
+        check('Undo puts back exactly what you had', JSON.stringify(Object.keys(stored(w2).prints)) === JSON.stringify(Object.keys(mine.prints)) && Object.keys(stored(w2).spools).length === 1 && Object.keys(stored(w2).queue).length === 0);
+
+        // two genuinely identical spools are not collapsed into one
+        const twins = JSON.parse(JSON.stringify(mine));
+        twins.spools.twinA = { ...mine.spools[mineSpool] };
+        const w3 = boot(JSON.stringify(mine));
+        await merge(w3, twins);
+        check('an extra identical spool (bought twice) is added, not merged away', Object.keys(stored(w3).spools).length === 2);
+
+        // id clash: same ids, different content
+        const clash = { schemaVersion: mine.schemaVersion, spools: { [mineSpool]: { brand: 'Esun', material: 'petg', color: 'Red', startGrams: 750, price: 18, date: '2026-08-01' } }, prints: { [Object.keys(mine.prints)[0]]: { name: 'Different', date: '2026-08-02', result: true, usage: [{ spoolId: mineSpool, grams: 10 }] } } };
+        const w4 = boot(JSON.stringify(mine));
+        await merge(w4, clash);
+        const s4 = stored(w4);
+        const red = Object.entries(s4.spools).find(([, s]) => s.color === 'Red');
+        const diff = Object.values(s4.prints).find((p) => p.name === 'Different');
+        check('clashing ids get new ids and nothing of yours is overwritten', Object.keys(s4.spools).length === 2 && !!red && red[0] !== mineSpool && s4.spools[mineSpool].color === 'Black' && Object.values(s4.prints).some((p) => p.name === 'Benchy') && diff && diff.usage[0].spoolId === red[0], JSON.stringify(diff));
+
+        // bad files change nothing
+        const w5 = boot(JSON.stringify(mine));
+        await merge(w5, 'not json');
+        check('a file that is not JSON is refused', q(w5, '#data-message').textContent.includes('could not be read'));
+        await merge(w5, { prints: { x: { name: '', date: '2026-01-01' } }, spools: {} });
+        check('an invalid backup is refused and nothing changes', q(w5, '#data-message').textContent.startsWith('Merge failed') && Object.keys(stored(w5).prints).length === 1, q(w5, '#data-message').textContent);
+        w5.__confirmAnswer = false;
+        await merge(w5, other);
+        check('declining the question changes nothing', q(w5, '#data-message').textContent.includes('cancelled') && Object.keys(stored(w5).prints).length === 1);
+        check('no unexpected errors in section 55', errors.length === e, errors.slice(e).join(' | '));
+    }
+
+    console.log('\n[56] Spools by storage location');
+    {
+        const e = errors.length;
+        const sp = (brand, color, location, extra = {}) => ({ brand, material: 'pla', color, startGrams: 1000, date: '2026-09-01', ...(location ? { location } : {}), ...extra });
+        const base = {
+            schemaVersion: 1, prints: {},
+            spools: { a: sp('Bambu Lab', 'Black', 'Shelf A'), b: sp('Sunlu', 'White', 'shelf a'), c: sp('Esun', 'Gray', 'Dry box'), d: sp('Elegoo', 'Red', ''), e: sp('Esun', 'Blue', 'Dry box', { archived: true }) }
+        };
+        const w = boot(JSON.stringify(base));
+        click(w, q(w, '#fila-button'));
+        const cards = () => qa(w, '#spools .spool-card').map((c) => c.textContent);
+        const sel = q(w, '#spool-location-filter');
+        check('the location controls show when a spool has a location', !q(w, '#location-tools').hidden);
+        const opts = Array.from(sel.options).map((o) => o.textContent);
+        check('options: all, each place once (ignoring case) with counts, and no location', opts.join('|') === 'All locations|Dry box (2)|Shelf A (2)|No location (1)', opts.join('|'));
+        setVal(w, sel, 'loc:shelf a');
+        check('filtering by a place shows only its spools', cards().length === 2 && cards().every((t) => t.includes('Stored: Shelf A') || t.includes('Stored: shelf a')), cards().length + '');
+        setVal(w, sel, 'none');
+        check('No location shows only spools without one', cards().length === 1 && cards()[0].includes('Elegoo'));
+        setVal(w, sel, 'loc:dry box');
+        check('the location filter works with the archived filter', cards().length === 2);
+        click(w, q(w, '#archive-off-checkbox'));
+        check('hiding archived leaves one in that place', cards().length === 1);
+        click(w, q(w, '#archive-off-checkbox'));
+        setVal(w, sel, 'all');
+
+        const box = q(w, '#group-location-checkbox');
+        click(w, box);
+        const heads = qa(w, '#spools .spool-group-heading').map((h2) => h2.textContent);
+        check('Group by location adds a heading per place, No location last', heads.join('|') === 'Dry box (2)|Shelf A (2)|No location (1)', heads.join('|'));
+        const kids = Array.from(q(w, '#spools').children).map((c) => c.classList.contains('spool-group-heading') ? 'H' : 'C').join('');
+        check('cards sit under their headings', kids === 'HCCHCCHC', kids);
+        check('the choice is remembered', stored(w).ui.groupByLocation === true);
+        setVal(w, sel, 'loc:dry box');
+        check('grouping is off while a single place is chosen', qa(w, '#spools .spool-group-heading').length === 0 && cards().length === 2);
+        setVal(w, sel, 'all');
+
+        const w2 = boot(JSON.stringify(stored(w)));
+        click(w2, q(w2, '#fila-button'));
+        check('grouping survives a reload', q(w2, '#group-location-checkbox').checked && qa(w2, '#spools .spool-group-heading').length === 3);
+
+        // no locations at all: controls stay hidden
+        const plain = JSON.parse(JSON.stringify(base));
+        for (const s of Object.values(plain.spools)) delete s.location;
+        plain.ui = { groupByLocation: true };
+        const w3 = boot(JSON.stringify(plain));
+        click(w3, q(w3, '#fila-button'));
+        check('without any location the controls are hidden and nothing is grouped', q(w3, '#location-tools').hidden && qa(w3, '#spools .spool-group-heading').length === 0 && qa(w3, '#spools .spool-card').length === 5);
+        check('no unexpected errors in section 56', errors.length === e, errors.slice(e).join(' | '));
+    }
+
+    console.log('\n[57] Data check');
+    {
+        const e = errors.length;
+        const sp = (brand, color, extra = {}) => ({ brand, material: 'pla', color, startGrams: 1000, date: '2026-09-01', ...extra });
+        const pr = (name, date, usage, extra = {}) => ({ name, date, result: true, usage, ...extra });
+        const bad = {
+            schemaVersion: 1,
+            spools: { a: sp('Bambu Lab', 'Black'), b: sp('Sunlu', 'White'), c: sp('Esun', 'Gray', { archived: true }) },
+            prints: {
+                p1: pr('Fine', '2026-10-01', [{ spoolId: 'a', grams: 20 }]),
+                p2: pr('Ghost', '2026-10-02', [{ spoolId: 'zzz', grams: 10 }, { spoolId: 'a', grams: 5 }]),
+                p3: pr('Nothing', '2026-10-03', []),
+                p4: pr('Future', '2099-01-01', [{ spoolId: 'a', grams: 5 }]),
+                p5: pr('Twin', '2026-10-04', [{ spoolId: 'a', grams: 7 }], { minutes: 30 }),
+                p6: pr('twin', '2026-10-04', [{ spoolId: 'a', grams: 7 }], { minutes: 30 }),
+                p7: pr('Twin', '2026-10-04', [{ spoolId: 'a', grams: 7 }], { minutes: 30 }),
+                p8: pr('Heavy', '2026-10-05', [{ spoolId: 'b', grams: 1200 }])
+            },
+            ams: { u1: { name: 'AMS 1', type: 'ams', slots: ['c', 'a', '', ''], price: null } }
+        };
+        const w = boot(JSON.stringify(bad));
+        click(w, q(w, '#data-button'));
+        check('nothing is listed until you ask', !q(w, '#data-check-results') && !!q(w, '#data-check-button'));
+        const before = JSON.stringify(stored(w));
+        click(w, q(w, '#data-check-button'));
+        const rows = () => qa(w, '#data-check-results .check-row');
+        const kinds = () => rows().map((r) => r.dataset.kind).sort().join();
+        check('finds each kind of problem once', kinds() === 'archived-loaded,duplicate,future-date,missing-spool,no-filament,over-weight', kinds());
+        check('checking does not change the data', JSON.stringify(stored(w)) === before);
+        const row = (k) => rows().find((r) => r.dataset.kind === k);
+        check('the duplicate row says how many times and counts spaces and case', row('duplicate').textContent.includes('3 times'), row('duplicate').textContent);
+        check('the weight row names the spool and the excess', row('over-weight').textContent.includes('Sunlu, White') && row('over-weight').textContent.includes('200g more'), row('over-weight').textContent);
+
+        // fix: remove missing rows
+        click(w, byText(w, 'button', 'Remove those rows', row('missing-spool')));
+        let s = stored(w);
+        check('Remove those rows keeps only the real spool', s.prints.p2.usage.length === 1 && s.prints.p2.usage[0].spoolId === 'a');
+        check('the list refreshes and that problem is gone', !row('missing-spool'));
+        click(w, byText(w, 'button', 'Undo', q(w, '#toast')));
+        check('Undo restores the missing row', stored(w).prints.p2.usage.length === 2 && !!row('missing-spool'));
+        click(w, byText(w, 'button', 'Remove those rows', row('missing-spool')));
+
+        // fix: duplicates keep the first
+        click(w, byText(w, 'button', 'Delete 2 extras', row('duplicate')));
+        s = stored(w);
+        check('Delete extras keeps one of the twins', Object.keys(s.prints).filter((id) => ['p5', 'p6', 'p7'].includes(id)).join() === 'p5', Object.keys(s.prints).join());
+
+        // fix: unload archived
+        click(w, byText(w, 'button', 'Unload it', row('archived-loaded')));
+        s = stored(w);
+        check('Unload clears only the archived spool from the AMS', s.ams.u1.slots.join() === ',a,,', s.ams.u1.slots.join());
+
+        // edit actions open the print popup; re-weigh opens the weigh popup
+        click(w, byText(w, 'button', 'Edit', row('future-date')));
+        check('Edit opens that print', q(w, '#print-popup').style.display === 'block' && q(w, '#name-tinput').value === 'Future');
+        w.document.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape' }));
+        click(w, byText(w, 'button', 'Re-weigh', row('over-weight')));
+        check('Re-weigh opens the weigh dialog', q(w, '#weigh-popup').style.display === 'block');
+        w.document.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape' }));
+
+        // clean data
+        const w2 = boot(JSON.stringify({ schemaVersion: 1, spools: { a: sp('Bambu Lab', 'Black') }, prints: { p1: pr('Fine', '2026-10-01', [{ spoolId: 'a', grams: 20 }]) } }));
+        click(w2, q(w2, '#data-button'));
+        click(w2, q(w2, '#data-check-button'));
+        check('clean data says no problems', q(w2, '#data-check-results').textContent.includes('No problems found'));
+        check('no unexpected errors in section 57', errors.length === e, errors.slice(e).join(' | '));
+    }
+
+    console.log('\n[58] Settings that worked');
+    {
+        const e = errors.length;
+        const sp = (brand, color, material) => ({ brand, material, color, startGrams: 1000, date: '2026-09-01' });
+        const prints = {};
+        let n = 0;
+        const add = (profile, result, usage, name = 'P') => { prints['x' + (n++)] = { name: `${name}${n}`, date: '2026-10-01', result, usage, ...(profile ? { profile } : {}) }; };
+        const pla = [{ spoolId: 'a', grams: 10 }];
+        const petg = [{ spoolId: 'b', grams: 10 }];
+        // PLA 0.2 / 15% / none: 4 prints written three ways, 3 worked
+        add({ layer: '0.2 mm', infill: '15%', supports: 'none' }, true, pla);
+        add({ layer: '0.2mm', infill: '15 %', supports: 'None' }, true, pla);
+        add({ layer: '0.2', infill: '15', supports: 'none' }, true, pla);
+        add({ layer: '0.2 mm', infill: '15%', supports: 'none' }, false, pla);
+        // PLA 0.12 / 20%: only 2 prints, too few
+        add({ layer: '0.12 mm', infill: '20%', supports: 'tree' }, true, pla);
+        add({ layer: '0.12 mm', infill: '20%', supports: 'tree' }, true, pla);
+        // PETG 0.28 / 10%: 3 prints, 1 worked
+        add({ layer: '0.28 mm', infill: '10%', supports: '' }, true, petg);
+        add({ layer: '0.28 mm', infill: '10%', supports: '' }, false, petg);
+        add({ layer: '0.28 mm', infill: '10%', supports: '' }, false, petg);
+        // no notes and name-only notes and a deleted spool do not count
+        add(null, true, pla); add(null, true, pla); add(null, true, pla);
+        add({ name: '0.20mm Standard' }, true, pla); add({ name: '0.20mm Standard' }, true, pla); add({ name: '0.20mm Standard' }, true, pla);
+        for (let i = 0; i < 3; i++) add({ layer: '0.4 mm', infill: '5%', supports: 'x' }, true, [{ spoolId: 'gone', grams: 5 }]);
+        // mixed print: PETG is most of it, so it counts under PETG
+        for (let i = 0; i < 3; i++) add({ layer: '0.16 mm', infill: '25%', supports: '' }, true, [{ spoolId: 'a', grams: 5 }, { spoolId: 'b', grams: 50 }]);
+        const w = boot(JSON.stringify({ schemaVersion: 1, spools: { a: sp('Bambu Lab', 'Black', 'pla'), b: sp('Sunlu', 'Clear', 'petg') }, prints }));
+        click(w, q(w, '#fila-button'));
+        const panel = q(w, '#settings-worked-panel');
+        check('the panel appears once a combination has enough prints', !!panel);
+        const tables = qa(w, 'table', panel);
+        check('one table per material, the one with more prints first', tables.map((t) => t.dataset.material).join() === 'PETG,PLA' || tables.map((t) => t.dataset.material).join() === 'PLA,PETG', tables.map((t) => t.dataset.material).join());
+        const rowsOf = (m) => qa(w, 'tbody tr', tables.find((t) => t.dataset.material === m)).map((r) => r.textContent);
+        check('PLA: spelling variants count as one combination (4 prints, 3 worked, 75%)', rowsOf('PLA').length === 1 && rowsOf('PLA')[0].includes('4') && rowsOf('PLA')[0].includes('3 (75%)'), rowsOf('PLA').join('|'));
+        check('combinations with fewer than 3 prints are left out', !panel.textContent.includes('0.12'));
+        check('PETG: best combination first, with its success rate', rowsOf('PETG')[0].includes('0.16 mm') && rowsOf('PETG')[0].includes('3 (100%)') && rowsOf('PETG').some((t) => t.includes('0.28 mm') && t.includes('1 (33%)')), rowsOf('PETG').join('|'));
+        check('prints without notes, with only a profile name, or with a deleted spool are ignored', !panel.textContent.includes('0.4 mm') && !panel.textContent.includes('Standard'));
+        check('a summary sentence names the best combination', qa(w, '.panel-total-line', panel).some((l) => l.textContent.startsWith('PLA: 0.2 mm layers, 15% infill, no supports worked 3 of 4 times (75%)')), qa(w, '.panel-total-line', panel).map((l) => l.textContent).join('|'));
+
+        const w2 = boot(JSON.stringify({ schemaVersion: 1, spools: { a: sp('Bambu Lab', 'Black', 'pla') }, prints: { p1: { name: 'A', date: '2026-10-01', result: true, usage: pla, profile: { layer: '0.2' } } } }));
+        click(w2, q(w2, '#fila-button'));
+        check('with too few prints the panel is not shown', !q(w2, '#settings-worked-panel'));
+        check('no unexpected errors in section 58', errors.length === e, errors.slice(e).join(' | '));
+    }
+
     console.log(`\n==== ${passed} passed, ${failed} failed, ${errors.length} unexpected error(s) ====`);
     if (failures.length) console.log('FAILED:\n - ' + failures.join('\n - '));
     if (errors.length) console.log('ERRORS:\n' + errors.join('\n'));

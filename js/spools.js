@@ -15,6 +15,8 @@ import { $, fmtGrams, fmtMoney, formatDate, h, icon, isObject, isValidDate, loca
 export const spoolList = $('spools');
 export const archiveOffBox = $('archive-off-checkbox');
 export const materialFilter = $('spool-material-filter');
+export const locationFilter = $('spool-location-filter');
+const groupBox = $('group-location-checkbox');
 
 export function setupSpoolToolbar() {
     const plus = h('button', 'acc-buttons btn btn-primary');
@@ -32,6 +34,47 @@ export function setupSpoolToolbar() {
         renderSpools();
     });
     materialFilter.addEventListener('change', renderSpools);
+    locationFilter.addEventListener('change', renderSpools);
+    groupBox.addEventListener('change', () => {
+        state.ui.groupByLocation = groupBox.checked;
+        saveState();
+        renderSpools();
+    });
+}
+
+const NO_LOCATION = 'none';   // option values: 'all', 'none', or 'loc:' + the lower-case place
+const locationKey = (s) => locationOf(s).toLowerCase();
+
+/** The storage locations in use (ignoring case), in alphabetical order: [{ key, label, count }]. */
+export function spoolLocations() {
+    const found = new Map();
+    for (const s of Object.values(state.spools)) {
+        if (!isObject(s)) continue;
+        const label = locationOf(s);
+        if (label === '') continue;
+        const entry = found.get(label.toLowerCase()) || { key: label.toLowerCase(), label, count: 0 };
+        entry.count++;
+        found.set(entry.key, entry);
+    }
+    return Array.from(found.values()).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** Keep the location dropdown in step with the locations that exist; hide the controls when there are none. */
+function syncLocationTools(all) {
+    const locations = spoolLocations();
+    const tools = $('location-tools');
+    tools.hidden = locations.length === 0;
+    const previous = locationFilter.value;
+    locationFilter.replaceChildren();
+    const add = (value, text) => { const o = h('option', 'option-input', text); o.value = value; locationFilter.appendChild(o); };
+    add('all', 'All locations');
+    for (const l of locations) add('loc:' + l.key, `${l.label} (${l.count})`);
+    const unplaced = all.filter(([, s]) => locationKey(s) === '').length;
+    if (locations.length > 0 && unplaced > 0) add(NO_LOCATION, `No location (${unplaced})`);
+    const valid = Array.from(locationFilter.options).some((o) => o.value === previous);
+    locationFilter.value = valid ? previous : 'all';
+    groupBox.checked = state.ui.groupByLocation && locations.length > 0;
+    return locations;
 }
 
 export function renderSpools() {
@@ -53,15 +96,18 @@ export function renderSpools() {
         return;
     }
 
+    const locations = syncLocationTools(all);
+    const where = locationFilter.value;
     const visible = all.filter(([, s]) => {
         if (s.archived && state.hideArchived) return false;
+        if (where === NO_LOCATION ? locationKey(s) !== '' : where !== 'all' && 'loc:' + locationKey(s) !== where) return false;
         return materialFilter.value === 'all' || materialKey(s) === materialFilter.value;
     });
     if (visible.length === 0) {
         const allArchivedHidden = state.hideArchived && all.every(([, s]) => s.archived);
         spoolList.appendChild(allArchivedHidden
             ? emptyState_("All spools are archived. Uncheck 'Hide archived' to see them, or click the + to add a new spool.")
-            : emptyState_('No spools match this filter.', 'Pick another material or show archived spools.'));
+            : emptyState_('No spools match this filter.', 'Pick another material or location, or show archived spools.'));
         return;
     }
 
@@ -70,6 +116,19 @@ export function renderSpools() {
         const arch = Number(Boolean(a[1].archived)) - Number(Boolean(b[1].archived));
         return arch !== 0 ? arch : String(b[1].date || '').localeCompare(String(a[1].date || ''));
     });
+    if (groupBox.checked && where === 'all') {
+        // One heading per place, then "No location" last
+        const groups = [...locations.map((l) => ({ key: l.key, label: l.label })), { key: '', label: 'No location' }];
+        for (const g of groups) {
+            const members = visible.filter(([, s]) => locationKey(s) === g.key);
+            if (members.length === 0) continue;
+            const heading = h('h3', 'spool-group-heading', `${g.label} (${members.length})`);
+            heading.dataset.location = g.key;
+            spoolList.appendChild(heading);
+            for (const [id, spool] of members) spoolList.appendChild(buildSpoolCard(id, spool));
+        }
+        return;
+    }
     for (const [id, spool] of visible) spoolList.appendChild(buildSpoolCard(id, spool));
 }
 

@@ -737,3 +737,83 @@ export function leftoverSpools() {
         })
         .sort((a, b) => b.grams - a.grams);
 }
+
+/**
+ * Models you print again and again: prints grouped by name (ignoring case and extra spaces).
+ * Only names with at least `min` prints are listed. Returns the top `limit`, most printed first.
+ */
+export function mostPrinted(min = 2, limit = 8) {
+    const groups = new Map();
+    for (const [id, p] of Object.entries(state.prints)) {
+        if (!isObject(p)) continue;
+        const name = String(p.name || '').trim().replace(/\s+/g, ' ');
+        if (name === '') continue;
+        const key = name.toLowerCase();
+        const g = groups.get(key) || { key, name, count: 0, succeeded: 0, grams: 0, minutes: 0, cost: 0, latestId: id, latestDate: '' };
+        g.count++;
+        if (p.result) g.succeeded++;
+        g.grams += totalGramsOfPrint(p);
+        g.minutes += validMinutes(p.minutes) || 0;
+        g.cost += costOfPrint(p);
+        const date = isValidDate(p.date) ? p.date : '';
+        if (date >= g.latestDate) { g.latestDate = date; g.latestId = id; g.name = name; }
+        groups.set(key, g);
+    }
+    return Array.from(groups.values()).filter((g) => g.count >= min)
+        .sort((a, b) => b.count - a.count || b.grams - a.grams || a.name.localeCompare(b.name))
+        .slice(0, limit);
+}
+
+/** Combos with fewer prints than this are too few to say anything about. */
+export const MIN_SETTINGS_SAMPLE = 3;
+
+// "0.2 mm", "0.2mm" and "0.2" are the same layer height; "15 %" and "15%" the same infill.
+const settingKey = (v) => String(v || '').toLowerCase().replace(/\s+/g, '').replace(/(mm|%)$/, '');
+
+/** The material a print mostly used: the one with the most grams (the first on a tie). */
+function mainMaterialOf(print) {
+    let best = null;
+    for (const u of usageOf(print)) {
+        const spool = state.spools[u.spoolId];
+        if (!isObject(spool)) continue;
+        const grams = Number(u.grams) || 0;
+        if (best === null || grams > best.grams) best = { grams, material: String(spool.material || 'other').toUpperCase() };
+    }
+    return best ? best.material : null;
+}
+
+/**
+ * How often each combination of layer height, infill and supports worked, per material.
+ * Prints without any of those notes, or whose spools are gone, are left out. Combos with fewer than
+ * `min` prints are left out. Returns [{ material, prints, combos: [{ key, label, count, succeeded, rate }] }].
+ */
+export function settingsThatWorked(min = MIN_SETTINGS_SAMPLE) {
+    const byMaterial = new Map();
+    for (const p of Object.values(state.prints)) {
+        if (!isObject(p) || !isObject(p.profile)) continue;
+        const { layer = '', infill = '', supports = '' } = p.profile;
+        if (!layer && !infill && !supports) continue;
+        const material = mainMaterialOf(p);
+        if (material === null) continue;
+        const key = [layer, infill, supports].map(settingKey).join('|');
+        const combos = byMaterial.get(material) || new Map();
+        const c = combos.get(key) || { key, count: 0, succeeded: 0, shown: new Map() };
+        c.count++;
+        if (p.result) c.succeeded++;
+        const label = [layer && `${layer} layers`, infill && `${infill} infill`, supports && (/^(none|no|off)$/i.test(supports.trim()) ? 'no supports' : `${supports} supports`)].filter(Boolean).join(', ');
+        c.shown.set(label, (c.shown.get(label) || 0) + 1);
+        combos.set(key, c);
+        byMaterial.set(material, combos);
+    }
+    const out = [];
+    for (const [material, combos] of byMaterial) {
+        const list = Array.from(combos.values()).filter((c) => c.count >= min).map((c) => ({
+            key: c.key,
+            // show the wording used most often for this combination
+            label: Array.from(c.shown.entries()).sort((a, b) => b[1] - a[1])[0][0],
+            count: c.count, succeeded: c.succeeded, rate: c.succeeded / c.count
+        })).sort((a, b) => b.rate - a.rate || b.count - a.count || a.label.localeCompare(b.label));
+        if (list.length > 0) out.push({ material, prints: list.reduce((n, c) => n + c.count, 0), combos: list });
+    }
+    return out.sort((a, b) => b.prints - a.prints || a.material.localeCompare(b.material));
+}

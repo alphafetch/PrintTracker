@@ -1,13 +1,14 @@
 import { buildAchievementsPanel } from './achievements.js';
 import { findMaterial } from './catalog.js';
-import { calcStats, describeDays, hardwareCost, spoolForecast, totalGramsOfPrint } from './calc.js';
-import { failReasonLabel, MATERIAL_COLORS, MONTHS, RANGES, Sections } from './constants.js';
+import { calcStats, describeDays, mostPrinted, hardwareCost, spoolForecast, totalGramsOfPrint } from './calc.js';
+import { DASH_ACHIEVEMENTS, failReasonLabel, MATERIAL_COLORS, MONTHS, RANGES, Sections } from './constants.js';
 import { openPrintPopup } from './printPopup.js';
 import { emptyState_, makeBadge, plural } from './render.js';
 import { openSpoolPopup } from './spoolPopup.js';
 import { saveState, state } from './state.js';
 import { showTab } from './tabs.js';
 import { $, fmtDuration, fmtGrams, fmtMoney, formatDate, h, isObject, makeLink, makeSwatch, materialKey, normalizeLink, spoolHex, svgEl, todayLocal } from './util.js';
+import { effectiveDashOrder, openCustomizePopup } from './customize.js';
 import { buildGuidePanel } from './guide.js';
 import { buildHeatmapPanel } from './heatmap.js';
 import { buildRunningPanel, openStartPopup } from './running.js';
@@ -113,6 +114,12 @@ function buildRangeBar(range) {
     recap.title = 'A recap of a week or month that you can copy, print or save';
     recap.addEventListener('click', openSummaryPopup);
     bar.appendChild(recap);
+    const custom = h('button', 'btn btn-outline btn-small', 'Customize');
+    custom.type = 'button';
+    custom.id = 'customize-button';
+    custom.title = 'Choose which dashboard panels to show and in what order';
+    custom.addEventListener('click', openCustomizePopup);
+    bar.appendChild(custom);
     if (range !== 'all') {
         const note = h('p', 'range-note', 'Counts prints and filament bought in this range. Stock, upkeep and achievements always use everything.');
         note.id = 'dash-range-note';
@@ -164,6 +171,31 @@ function buildSpendPanel(stats) {
     const line = h('p', 'panel-total-line', `Whole setup so far: ${fmtMoney(c.total)} (filament ${fmtMoney(c.filament)}${hw}).`);
     line.id = 'setup-total-line';
     panel.appendChild(line);
+    return panel;
+}
+
+function buildMostPrintedPanel() {
+    const list = mostPrinted();
+    if (list.length === 0) return null;
+    const panel = dashPanel('Most-printed models');
+    panel.id = 'most-printed-panel';
+    for (const g of list) {
+        const row = h('div', 'list-row');
+        row.dataset.key = g.key;
+        const text = h('span', 'list-main');
+        text.appendChild(h('span', 'list-title', `${g.name} \u00B7 ${g.count}x`));
+        const bits = [`${Math.round((g.succeeded / g.count) * 100)}% succeeded`, `${fmtGrams(g.grams)}g total`];
+        if (g.minutes > 0) bits.push(fmtDuration(g.minutes));
+        if (g.cost > 0) bits.push(fmtMoney(g.cost));
+        text.appendChild(h('span', 'list-sub', bits.join(' \u00B7 ')));
+        row.appendChild(text);
+        const again = h('button', 'btn btn-outline btn-small', 'Print again');
+        again.type = 'button';
+        again.title = `Log another copy of ${g.name}, starting from your latest one`;
+        again.addEventListener('click', () => openPrintPopup({ copyFromId: g.latestId }));
+        row.appendChild(again);
+        panel.appendChild(row);
+    }
     return panel;
 }
 
@@ -277,8 +309,10 @@ export function renderDashboard() {
         root.appendChild(panel);
     }
 
-    const cols = h('div', 'dash-grid');
-    for (const panel of buildPrinterPanels(all)) cols.appendChild(panel);
+    // Each grid panel is built under a key so the Customize popup can hide or reorder it.
+    const built = new Map();
+    const add = (key, ...els) => { if (els.length > 0) built.set(key, els); };
+    add('printer', ...buildPrinterPanels(all));
 
     // --- Filament by material (donut) ---
     const materials = Object.entries(stats.byMaterial).filter(([, g]) => g > 0).sort((a, b) => b[1] - a[1]);
@@ -315,7 +349,7 @@ export function renderDashboard() {
         }
         wrap.appendChild(legend);
         panel.appendChild(wrap);
-        cols.appendChild(panel);
+        add('material', panel);
     }
 
     // --- Prints per month (columns, with empty months filled in) ---
@@ -323,14 +357,16 @@ export function renderDashboard() {
     if (printSeries.length > 0) {
         const panel = dashPanel('Prints per month');
         panel.appendChild(columnChart(printSeries, String, (c) => `${MONTHS[c.m - 1]} ${c.y}: ${plural(c.n, 'print')}`));
-        cols.appendChild(panel);
+        add('perMonth', panel);
     }
 
     const heat = buildHeatmapPanel(dashPanel);
-    if (heat) cols.appendChild(heat);
+    if (heat) add('heatmap', heat);
 
-    if (stats.failed > 0) cols.appendChild(buildFailurePanel(stats));
-    if (Object.keys(stats.spendByMonth).length > 0) cols.appendChild(buildSpendPanel(stats));
+    if (stats.failed > 0) add('failures', buildFailurePanel(stats));
+    if (Object.keys(stats.spendByMonth).length > 0) add('spend', buildSpendPanel(stats));
+    const popular = buildMostPrintedPanel();
+    if (popular) add('mostPrinted', popular);
 
     // --- Recent prints ---
     const recent = Object.entries(state.prints).filter(([, p]) => isObject(p))
@@ -352,7 +388,7 @@ export function renderDashboard() {
             row.addEventListener('click', () => showTab(Sections.PRINTS));
             panel.appendChild(row);
         }
-        cols.appendChild(panel);
+        add('recent', panel);
     }
 
     // --- Up next (queue) ---
@@ -376,10 +412,15 @@ export function renderDashboard() {
             row.appendChild(log);
             panel.appendChild(row);
         }
-        cols.appendChild(panel);
+        add('upNext', panel);
     }
 
+    const cols = h('div', 'dash-grid');
+    for (const key of effectiveDashOrder()) {
+        if (state.ui.dashHidden.includes(key) || !built.has(key)) continue;
+        for (const el of built.get(key)) cols.appendChild(el);
+    }
     if (cols.children.length > 0) root.appendChild(cols);
 
-    root.appendChild(buildAchievementsPanel(all));
+    if (!state.ui.dashHidden.includes(DASH_ACHIEVEMENTS)) root.appendChild(buildAchievementsPanel(all));
 }

@@ -143,3 +143,17 @@ export const RANGES = [
     ['90', 'Last 90 days'],
     ['year', 'This year']
 ];
+
+/** Dashboard panels the person can hide or reorder. Achievements can only be hidden; the rest sit in this default order. */
+export const DASH_PANELS = [
+    ['printer', 'Printers'],
+    ['material', 'Filament by material'],
+    ['perMonth', 'Prints per month'],
+    ['heatmap', 'Print calendar'],
+    ['failures', 'Why prints fail'],
+    ['spend', 'Filament spending'],
+    ['mostPrinted', 'Most-printed models'],
+    ['recent', 'Recent prints'],
+    ['upNext', 'Up next']
+];
+export const DASH_ACHIEVEMENTS = 'achievements';
