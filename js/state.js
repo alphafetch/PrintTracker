@@ -1,5 +1,5 @@
 import { AMS_TYPES, BRANDS, brandOfLegacyModel, findPrinter } from './catalog.js';
-import { ACCENTS, BACKGROUNDS, CORRUPT_KEY, CURRENCIES, DATE_FORMATS, ANALYSIS_GROUPS, SPOOL_SORTS, DASH_ACHIEVEMENTS, DASH_PANELS, FAIL_REASONS, RANGES, KNOWN_MATERIALS, MAX_EXTRA_PRINTERS, NOZZLES, SCHEMA_VERSION, SETTINGS_VERSION, STORAGE_KEY, UNIT_LABELS } from './constants.js';
+import { ACCENTS, BACKGROUNDS, CORRUPT_KEY, CURRENCIES, DATE_FORMATS, ANALYSIS_GROUPS, MAX_SAVED_VIEWS, PRINT_RESULT_FILTERS, PRINT_SORTS, SPOOL_SORTS, DASH_ACHIEVEMENTS, DASH_PANELS, FAIL_REASONS, RANGES, KNOWN_MATERIALS, MAX_EXTRA_PRINTERS, NOZZLES, SCHEMA_VERSION, SETTINGS_VERSION, STORAGE_KEY, UNIT_LABELS } from './constants.js';
 import { clampNum, cleanText, isObject, isSafeId, isValidDate, normalizeLink, notify, todayLocal, validMinutes } from './util.js';
 
 // ---------- State and storage ----------
@@ -210,6 +210,24 @@ function knownPanels(raw, allowAchievements) {
     return out;
 }
 
+/** Saved print filters: [{ name, search, result, tag, sort }], at most MAX_SAVED_VIEWS with unique names. */
+export function cleanViews(raw) {
+    const out = [];
+    for (const v of Array.isArray(raw) ? raw : []) {
+        if (!isObject(v) || out.length >= MAX_SAVED_VIEWS) continue;
+        const name = cleanText(v.name, 30);
+        if (name === '' || out.some((o) => o.name.toLowerCase() === name.toLowerCase())) continue;
+        out.push({
+            name,
+            search: cleanText(v.search, 80),
+            result: PRINT_RESULT_FILTERS.includes(v.result) ? v.result : 'all',
+            tag: typeof v.tag === 'string' && v.tag !== '' && v.tag !== 'all' ? cleanText(v.tag, MAX_TAG_LENGTH).toLowerCase() : 'all',
+            sort: PRINT_SORTS.includes(v.sort) ? v.sort : 'newest'
+        });
+    }
+    return out;
+}
+
 export function cleanUi(raw, hasData = false) {
     const u = isObject(raw) ? raw : {};
     const when = typeof u.backupDismissedAt === 'string' ? new Date(u.backupDismissedAt) : null;
@@ -220,6 +238,7 @@ export function cleanUi(raw, hasData = false) {
         // Someone with data already does not need the getting-started guide unless they ask for it.
         guideDismissed: typeof u.guideDismissed === 'boolean' ? u.guideDismissed : hasData,
         groupByLocation: u.groupByLocation === true,
+        savedViews: cleanViews(u.savedViews),
         spoolSort: SPOOL_SORTS.some(([k]) => k === u.spoolSort) ? u.spoolSort : 'default',
         dashHidden: knownPanels(u.dashHidden, true),
         dashOrder: knownPanels(u.dashOrder, false)
@@ -329,7 +348,7 @@ export function emptyState() {
         hideArchived: false,
         theme: null,
         lastExported: null,
-        ui: { backupDismissedAt: null, range: 'all', analysisGroup: 'brand-material', guideDismissed: false, groupByLocation: false, spoolSort: 'default', dashHidden: [], dashOrder: [] },
+        ui: { backupDismissedAt: null, range: 'all', analysisGroup: 'brand-material', guideDismissed: false, groupByLocation: false, spoolSort: 'default', savedViews: [], dashHidden: [], dashOrder: [] },
         ams: {},
         parts: {},
         running: {}

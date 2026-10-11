@@ -3885,6 +3885,86 @@ const msg = () => q(w, '#data-message').textContent;
         check('no unexpected errors in section 63', errors.length === e, errors.slice(e).join(' | '));
     }
 
+    console.log('\n[64] Saved filters on Prints');
+    {
+        const e = errors.length;
+        const pr = (name, date, result, mat, tags = []) => ({ name, date, result, usage: [{ spoolId: mat, grams: 10 }], tags });
+        const base = { schemaVersion: 1,
+            spools: { pla: { brand: 'Bambu Lab', material: 'pla', color: 'Black', startGrams: 1000, date: '2026-09-01' }, petg: { brand: 'Sunlu', material: 'petg', color: 'Clear', startGrams: 1000, date: '2026-09-01' } },
+            prints: { a: pr('Gear', '2026-10-01', false, 'petg', ['gift']), b: pr('Vase', '2026-10-02', true, 'petg'), c: pr('Clip', '2026-10-03', false, 'pla'), d: pr('Hook', '2026-10-04', false, 'petg') } };
+        const w = boot(JSON.stringify(base));
+        click(w, q(w, '#prints-button'));
+        const names = () => qa(w, '#print-list .print-card .card-title').map((t) => t.textContent);
+        const bar = q(w, '#views-bar');
+        check('the saved-filters bar shows once there are prints', !bar.hidden && q(w, '#view-select').disabled && q(w, '#view-select').textContent.includes('None saved yet'));
+        click(w, q(w, '#view-save-open'));
+        setVal(w, q(w, '#view-name'), 'Nothing');
+        click(w, q(w, '#view-save'));
+        check('saving with nothing set is refused with an explanation', !q(w, '#view-error').hidden && q(w, '#view-error').textContent.includes('Nothing to save'));
+        setVal(w, q(w, '#print-filter'), 'failure'); setVal(w, q(w, '#print-search'), 'petg'); setVal(w, q(w, '#print-sort'), 'oldest');
+        check('the filters narrow the list', names().join() === 'Gear,Hook', names().join());
+        setVal(w, q(w, '#view-name'), '   ');
+        click(w, q(w, '#view-save'));
+        check('a blank name is refused', q(w, '#view-error').textContent.includes('name'));
+        setVal(w, q(w, '#view-name'), 'Failed  PETG');
+        click(w, q(w, '#view-save'));
+        const saved = stored(w).ui.savedViews;
+        check('saving stores search, result, tag and sort under a tidy name', saved.length === 1 && saved[0].name === 'Failed PETG' && saved[0].search === 'petg' && saved[0].result === 'failure' && saved[0].tag === 'all' && saved[0].sort === 'oldest', JSON.stringify(saved));
+        check('the form closes and the new view is selected with a Delete button', q(w, '#view-save-form').hidden && q(w, '#view-select').value === 'Failed PETG' && !q(w, '#view-delete').hidden);
+
+        // reset the toolbar, then apply
+        setVal(w, q(w, '#print-filter'), 'all'); setVal(w, q(w, '#print-search'), ''); setVal(w, q(w, '#print-sort'), 'newest');
+        check('changing a filter deselects the view', q(w, '#view-select').value === '' && q(w, '#view-delete').hidden && names().length === 4);
+        setVal(w, q(w, '#view-select'), 'Failed PETG');
+        check('choosing a view sets every control and redraws', q(w, '#print-filter').value === 'failure' && q(w, '#print-search').value === 'petg' && q(w, '#print-sort').value === 'oldest' && names().join() === 'Gear,Hook', names().join());
+
+        // a tag view, then the tag disappears
+        setVal(w, q(w, '#print-filter'), 'all'); setVal(w, q(w, '#print-search'), ''); setVal(w, q(w, '#print-sort'), 'newest');
+        setVal(w, q(w, '#print-tag-filter'), 'gift');
+        click(w, q(w, '#view-save-open')); setVal(w, q(w, '#view-name'), 'Gifts'); click(w, q(w, '#view-save'));
+        check('a second view is saved', stored(w).ui.savedViews.length === 2 && stored(w).ui.savedViews[1].tag === 'gift');
+        // same name updates instead of adding
+        setVal(w, q(w, '#print-filter'), 'failure');
+        click(w, q(w, '#view-save-open')); setVal(w, q(w, '#view-name'), 'gifts'); click(w, q(w, '#view-save'));
+        check('saving under an existing name (any case) updates it', stored(w).ui.savedViews.length === 2 && stored(w).ui.savedViews[1].result === 'failure' && stored(w).ui.savedViews[1].name === 'gifts', JSON.stringify(stored(w).ui.savedViews));
+
+        // survives reload
+        const w2 = boot(JSON.stringify(stored(w)));
+        click(w2, q(w2, '#prints-button'));
+        check('saved filters survive a reload', Array.from(q(w2, '#view-select').options).map((o) => o.value).join('|') === '|Failed PETG|gifts');
+        setVal(w2, q(w2, '#view-select'), 'Failed PETG');
+        check('and still work after the reload', qa(w2, '#print-list .print-card').length === 2);
+
+        // delete + undo
+        click(w, q(w, '#view-delete'));
+        check('Delete removes the selected view', stored(w).ui.savedViews.length === 1 && stored(w).ui.savedViews[0].name === 'Failed PETG');
+        click(w, byText(w, 'button', 'Undo', q(w, '#toast')));
+        check('Undo puts it back in the same place', stored(w).ui.savedViews.map((v) => v.name).join() === 'Failed PETG,gifts');
+
+        // limits and cleaning
+        const many = JSON.parse(JSON.stringify(stored(w)));
+        many.ui.savedViews = [];
+        for (let i = 0; i < 14; i++) many.ui.savedViews.push({ name: 'V' + i, search: 'x', result: 'bogus', tag: 'all', sort: 'weird' });
+        many.ui.savedViews.push({ name: 'v1', search: 'dup' }, { name: '', search: 'noname' }, 'junk', null);
+        const w3 = boot(JSON.stringify(many));
+        click(w3, q(w3, '#prints-button'));
+        const opts = Array.from(q(w3, '#view-select').options).length - 1;
+        check('a loaded file keeps at most 12 views, drops junk and duplicate names', opts === 12, String(opts));
+        setVal(w3, q(w3, '#view-select'), 'V0');
+        check('bad result or sort values fall back to the defaults', q(w3, '#print-filter').value === 'all' && q(w3, '#print-sort').value === 'newest');
+        setVal(w3, q(w3, '#print-search'), 'zzz'); click(w3, q(w3, '#view-save-open')); setVal(w3, q(w3, '#view-name'), 'One too many'); click(w3, q(w3, '#view-save'));
+        check('the 13th is refused with a message and nothing is added', q(w3, '#view-error').textContent.includes('12 saved filters') && Array.from(q(w3, '#view-select').options).length === 13);
+        w3.document.dispatchEvent(new w3.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+        // a spool filter is cleared when applying
+        click(w, q(w, '#fila-button'));
+        click(w, byText(w, 'button', 'Show prints', qa(w, '#spools .spool-card')[0]));
+        check('a spool filter is active before applying a view', !q(w, '#print-spool-note').hidden);
+        setVal(w, q(w, '#view-select'), 'Failed PETG');
+        check('applying a view clears the spool filter', q(w, '#print-spool-note').hidden);
+        check('no unexpected errors in section 64', errors.length === e, errors.slice(e).join(' | '));
+    }
+
     console.log(`\n==== ${passed} passed, ${failed} failed, ${errors.length} unexpected error(s) ====`);
     if (failures.length) console.log('FAILED:\n - ' + failures.join('\n - '));
     if (errors.length) console.log('ERRORS:\n' + errors.join('\n'));

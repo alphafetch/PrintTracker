@@ -5,6 +5,7 @@ import { openPrintPopup } from './printPopup.js';
 import { emptyState_, makeBadge, plural, renderAll } from './render.js';
 import { cleanQueueSpec, saveState, state } from './state.js';
 import { showTab } from './tabs.js';
+import { renderViews } from './views.js';
 import { $, fmtDuration, fmtGrams, fmtMoney, formatDate, h, icon, isObject, makeLink, makeSwatch, normalizeLink, notify, spoolHex, uid } from './util.js';
 
 // ---------- Rendering: prints ----------
@@ -147,6 +148,7 @@ export function renderPrints() {
     $('prints-toolbar').hidden = all.length === 0;
     renderTagControls();
     renderSpoolFilterNote();
+    renderViews();
 
     if (all.length === 0) {
         setVisible([]);

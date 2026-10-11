@@ -71,6 +71,18 @@
                     <option value="time">Longest print</option>
                 </select>
             </div>
+            <div id="views-bar" class="views-bar" hidden>
+                <label for="view-select" class="views-label">Saved filters</label>
+                <select id="view-select" class="dropdown"></select>
+                <button type="button" id="view-delete" class="btn btn-danger-ghost btn-small" hidden>Delete</button>
+                <button type="button" id="view-save-open" class="btn btn-outline btn-small">Save these filters</button>
+                <span id="view-save-form" class="views-form" hidden>
+                    <input type="text" id="view-name" class="text-input" maxlength="30" placeholder="Name, e.g., Failed PETG" aria-label="Name for these filters" autocomplete="off">
+                    <button type="button" id="view-save" class="btn btn-primary btn-small">Save</button>
+                    <button type="button" id="view-save-cancel" class="btn btn-outline btn-small">Cancel</button>
+                </span>
+                <p id="view-error" class="error-text" role="alert" hidden></p>
+            </div>
             <p id="print-spool-note" class="spool-filter-note" role="status" hidden></p>
             <details id="tag-totals" class="panel tag-panel" hidden></details>
             <div id="print-list" class="card-list"></div>

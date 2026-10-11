@@ -168,3 +168,7 @@ export const SPOOL_SORTS = [
     ['perkg-desc', 'Priciest per kg'],
     ['brand', 'Brand A to Z']
 ];
+
+export const MAX_SAVED_VIEWS = 12;
+export const PRINT_RESULT_FILTERS = ['all', 'success', 'failure'];
+export const PRINT_SORTS = ['newest', 'oldest', 'name', 'grams', 'time'];

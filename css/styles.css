@@ -1488,3 +1488,10 @@ html[data-density="compact"] .page-head { margin-bottom: 12px; }
 .search-group-title { margin: 0 0 4px; font-size: 0.95rem; }
 .search-result { width: 100%; text-align: left; }
 .found { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
+
+/* Saved filters */
+.views-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 12px; }
+.views-label { font-size: 13px; font-weight: 600; }
+.views-form { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.views-form .text-input { width: 220px; max-width: 100%; }
+.views-bar .error-text { flex-basis: 100%; margin: 0; }
