@@ -4037,6 +4037,79 @@ const msg = () => q(w, '#data-message').textContent;
         check('no unexpected errors in section 65', errors.length === e, errors.slice(e).join(' | '));
     }
 
+    console.log('\n[66] Activity log');
+    {
+        const e = errors.length;
+        const w = boot();
+        click(w, q(w, '#data-button'));
+        check('a fresh browser starts with an empty log and says so', !!q(w, '.activity-empty') && !q(w, '#activity-list'));
+        const items = () => qa(w, '#activity-list .activity-text').map((t) => t.textContent);
+        addSpool(w, { brand: 'Bambu Lab', color: 'Black', grams: '1000', price: '20', date: '2026-09-01' });
+        click(w, q(w, '#data-button'));
+        check('adding a spool is logged', items()[0] === 'Added spool "Bambu Lab, Black"', items().join('|'));
+        openPrint(w); fillPrint(w, { name: 'Benchy', rows: [{ spoolIndex: 0, grams: 15 }] }); savePrint(w);
+        click(w, q(w, '#data-button'));
+        check('logging a print is logged, newest first', items()[0] === 'Logged print "Benchy"' && items()[1] === 'Added spool "Bambu Lab, Black"', items().join('|'));
+        check('each entry shows when it happened', qa(w, '#activity-list .activity-time')[0].textContent.length > 4);
+
+        // edit via the print popup
+        click(w, q(w, '#prints-button'));
+        click(w, byText(w, 'button', 'Edit', q(w, '#print-list .print-card')));
+        setVal(w, q(w, '#notes-input'), 'now with notes');
+        savePrint(w);
+        click(w, q(w, '#data-button'));
+        check('editing a print is logged', items()[0] === 'Edited print "Benchy"', items().join('|'));
+
+        // delete + undo
+        click(w, q(w, '#prints-button'));
+        click(w, byText(w, 'button', 'Delete', q(w, '#print-list .print-card')));
+        click(w, q(w, '#data-button'));
+        check('deleting a print is logged', items()[0] === 'Deleted print "Benchy"', items().join('|'));
+        click(w, byText(w, 'button', 'Undo', q(w, '#toast')));
+        click(w, q(w, '#data-button'));
+        check('undoing shows up as the print coming back', items()[0] === 'Logged print "Benchy"', items().join('|'));
+
+        // archive / restore a spool
+        click(w, q(w, '#fila-button'));
+        click(w, byText(w, 'button', 'Archive', q(w, '#spools .spool-card'))); skipLeftover(w);
+        const arch = Object.values(stored(w).spools)[0];
+        click(w, q(w, '#data-button'));
+        check('archiving a spool is logged', items()[0] === 'Archived spool "Bambu Lab, Black"', JSON.stringify(arch) + items().join('|'));
+
+        // queue
+        click(w, q(w, '#queue-button'));
+        click(w, q(w, '#prints-button'));
+        click(w, byText(w, 'button', 'Add to queue', q(w, '#print-list .print-card')));
+        click(w, q(w, '#data-button'));
+        check('adding to the queue is logged', items()[0] === 'Added "Benchy" to the queue', items().join('|'));
+        const w2 = boot(JSON.stringify(stored(w)), { 'printTracker.activity': w.localStorage.getItem('printTracker.activity') });
+        click(w2, q(w2, '#data-button'));
+        check('the log is kept after a reload', qa(w2, '#activity-list .activity-text').map((t) => t.textContent).join('|') === items().join('|') && items().length >= 7);
+
+        // bulk changes are summarised
+        const big = { schemaVersion: 1, spools: { a: { brand: 'X', material: 'pla', color: 'Y', startGrams: 1000, date: '2026-09-01' } }, prints: {} };
+        for (let i = 0; i < 12; i++) big.prints['m' + i] = { name: 'Widget ' + i, date: '2026-10-01', result: true, usage: [{ spoolId: 'a', grams: 1 }] };
+        const w3 = boot(JSON.stringify(big));
+        click(w3, q(w3, '#prints-button'));
+        click(w3, q(w3, '#clear-data-button, #data-button'));
+        click(w3, q(w3, '#data-button'));
+        click(w3, q(w3, '#clear-data-button'));
+        click(w3, q(w3, '#data-button'));
+        const texts = qa(w3, '#activity-list .activity-text').map((t) => t.textContent);
+        check('deleting many things at once is one summarised line per kind', texts.includes('Deleted 12 prints') && texts.includes('Deleted spool "X, Y"'), texts.join('|'));
+
+        // limits, clearing, junk in storage
+        const w4 = boot(undefined, { 'printTracker.activity': JSON.stringify([{ at: '2026-10-01T10:00:00.000Z', text: 'Old entry' }, { at: 5, text: 'bad' }, 'junk', null, { text: 'no time' }]) });
+        click(w4, q(w4, '#data-button'));
+        check('junk in the stored log is ignored', qa(w4, '#activity-list .activity-text').map((t) => t.textContent).join() === 'Old entry', qa(w4, '#activity-list .activity-text').map((t) => t.textContent).join('|') + ' // ' + q(w4, '#activity-panel').textContent);
+        for (let i = 0; i < 70; i++) addSpool(w4, { brand: 'B' + i, color: 'C', grams: '1000', date: '2026-09-01' });
+        click(w4, q(w4, '#data-button'));
+        check('only the latest 25 are shown and the log is capped at 60', qa(w4, '#activity-list li').length === 25 && JSON.parse(w4.localStorage.getItem('printTracker.activity')).length === 60 && q(w4, '#activity-panel').textContent.includes('Showing the latest 25 of 60'));
+        click(w4, q(w4, '#activity-clear'));
+        check('Clear log empties it', !!q(w4, '.activity-empty') && w4.localStorage.getItem('printTracker.activity') === '[]');
+        check('no unexpected errors in section 66', errors.length === e, errors.slice(e).join(' | '));
+    }
+
     console.log(`\n==== ${passed} passed, ${failed} failed, ${errors.length} unexpected error(s) ====`);
     if (failures.length) console.log('FAILED:\n - ' + failures.join('\n - '));
     if (errors.length) console.log('ERRORS:\n' + errors.join('\n'));

@@ -46,6 +46,7 @@ A personal 3D print and filament tracker for Bambu Lab, FlashForge and ELEGOO pr
 - **Spool sorting:** a sort box on the Filament tab (newest or oldest first, most or least left, cheapest or priciest per kg, brand). The default is the old order, archived spools always come last, and spools without a price go after priced ones when sorting by price. It is remembered.
 - **Saved filters:** on the Prints tab, "Save these filters" stores the current search, result filter, tag and sort under a name (up to 12; saving under an existing name updates it). Pick one from the list to set everything at once; the list highlights a saved filter whenever the toolbar matches it. There is no date-range filter on prints, so "this month" is not something a saved filter can hold. Delete has Undo. They are kept in this browser and in backups.
 - **Compare backup:** on the Data tab, pick a backup file and see how it differs from this browser without changing anything: a table of what is the same, only in the file, only here, and changed (a changed print or spool is one with the same id but different details, such as a result, notes, filament or location). Settings, AMS, upkeep and timers are not compared. Use Merge JSON to bring in what is only in the file.
+- **Recent changes:** the Data tab lists what changed in your prints, spools and queue (logged, edited, deleted, archived, added to the queue...), newest first, with the time. It is built by comparing your data before and after every save, so it also covers edits, imports and undos (an undo shows as the opposite change). More than 5 changes of one kind at once become one line ("Deleted 12 prints"). It is kept in this browser only (not in backups), holds the last 60 changes, and can be cleared. Settings, AMS and upkeep are not logged.
 - **Data check:** the Data tab can look for prints that use deleted spools, spools logged past their weight, archived spools still in the AMS, prints with no filament or a future date, and exact duplicate prints. Each has one fix or an Edit/Re-weigh shortcut, and fixes can be undone.
 - **Settings that worked:** on the Filament tab, how often each layer height, infill and supports combination succeeded per material (a print counts under the material it used the most of; only combinations with 3 or more prints are shown, and "0.2" and "0.2 mm" count as the same).
 - **Enough-filament check:** when a filament row in the print form uses more grams than the spool has left, the warning offers up to two other active spools of the same material that have enough (the nearest fit first). One click switches the row. This also applies to prints started from the queue.
@@ -128,6 +129,9 @@ js/leftover.js    ask how much is left when archiving a spool
 js/customize.js   show, hide and reorder dashboard panels
 js/merge.js       merge another backup into this one
 js/check.js       data check with fixes
+js/activity.js    recent changes log
+js/compare.js     compare a backup with this browser
+js/views.js       saved filters on the Prints tab
 js/spoolsCsv.js   spools to and from CSV
 js/search.js      search everything
 js/snapshots.js  js/snapshotPanel.js
