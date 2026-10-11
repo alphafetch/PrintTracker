@@ -4326,6 +4326,69 @@ const msg = () => q(w, '#data-message').textContent;
         check('no unexpected errors in section 70', errors.length === e, errors.slice(e).join(' | '));
     }
 
+    console.log('\n[71] Undo last change');
+    {
+        const e = errors.length;
+        const w = boot(JSON.stringify({ schemaVersion: 1, prints: {}, spools: {} }));
+        click(w, q(w, '#data-button'));
+        check('with no changes yet the button is disabled and says so', q(w, '#undo-last').disabled && q(w, '#undo-last').textContent === 'Nothing to undo yet' && !q(w, '#undo-detail'));
+        addSpool(w, { brand: 'Alpha', color: 'Black', grams: '1000' });
+        addSpool(w, { brand: 'Beta', color: 'White', grams: '1000' });
+        click(w, q(w, '#data-button'));
+        check('after two changes the button is on and names the last one', !q(w, '#undo-last').disabled && q(w, '#undo-detail').textContent.includes('Added spool "Beta, White"') && q(w, '#undo-detail').textContent.includes('2 steps'), q(w, '#undo-detail') && q(w, '#undo-detail').textContent);
+        click(w, q(w, '#undo-last'));
+        check('Undo removes the last spool only', Object.values(stored(w).spools).map((s) => s.brand).join() === 'Alpha');
+        check('a toast says what was undone and offers Redo', q(w, '#toast').textContent.includes('Undid: Added spool "Beta, White"') && !!byText(w, 'button', 'Redo', q(w, '#toast')));
+        check('one step is left', q(w, '#undo-detail').textContent.includes('1 step available'), q(w, '#undo-detail').textContent);
+        click(w, byText(w, 'button', 'Redo', q(w, '#toast')));
+        check('Redo brings it back', Object.values(stored(w).spools).map((s) => s.brand).sort().join() === 'Alpha,Beta');
+        check('and Undo works again afterwards', !q(w, '#undo-last').disabled && q(w, '#undo-detail').textContent.includes('2 steps'), q(w, '#undo-detail').textContent);
+
+        // display choices are not changes, and survive an undo
+        click(w, q(w, '#fila-button'));
+        setVal(w, q(w, '#spool-sort'), 'brand');
+        click(w, q(w, '#data-button'));
+        check('changing the sort order is not an undo step', q(w, '#undo-detail').textContent.includes('Added spool "Beta, White"') && q(w, '#undo-detail').textContent.includes('2 steps'));
+        click(w, q(w, '#undo-last'));
+        check('Undo keeps your sort choice', stored(w).ui.spoolSort === 'brand' && Object.keys(stored(w).spools).length === 1);
+
+        // deletions and settings are covered
+        click(w, q(w, '#undo-last'));
+        check('Undo steps back further, to an empty tracker', Object.keys(stored(w).spools).length === 0 && q(w, '#undo-last').disabled);
+
+        // Delete all data can be undone
+        const w2 = boot(JSON.stringify({ schemaVersion: 1, prints: {}, spools: { a: { brand: 'Keep', material: 'pla', color: 'Me', startGrams: 1000, price: 20, date: '2026-09-01' } } }));
+        click(w2, q(w2, '#data-button'));
+        w2.__confirmAnswer = true;
+        click(w2, q(w2, '#clear-data-button'));
+        check('Delete all data empties the tracker', Object.keys(stored(w2).spools).length === 0);
+        click(w2, q(w2, '#data-button'));
+        click(w2, q(w2, '#undo-last'));
+        check('and Undo brings everything back', Object.keys(stored(w2).spools).join() === 'a');
+
+        // settings count too
+        click(w2, q(w2, '#settings-button')); click(w2, q(w2, '#settings-tab-preferences'));
+        setVal(w2, q(w2, '#set-min-pla'), '500');
+        click(w2, q(w2, '#data-button'));
+        check('a settings change is an undo step with a generic name', q(w2, '#undo-detail').textContent.includes('settings'), q(w2, '#undo-detail').textContent);
+        click(w2, q(w2, '#undo-last'));
+        check('Undo restores the old setting', !(stored(w2).settings.minStock || {}).pla);
+
+        // capped at ten steps
+        const w3 = boot(JSON.stringify({ schemaVersion: 1, prints: {}, spools: {} }));
+        for (let i = 0; i < 13; i++) addSpool(w3, { brand: 'S' + i, color: 'C', grams: '1000' });
+        click(w3, q(w3, '#data-button'));
+        check('only the last 10 steps are kept', q(w3, '#undo-detail').textContent.includes('10 steps'), q(w3, '#undo-detail').textContent);
+        for (let i = 0; i < 10; i++) click(w3, q(w3, '#undo-last'));
+        check('undoing ten times leaves the first three spools', Object.keys(stored(w3).spools).length === 3 && q(w3, '#undo-last').disabled);
+
+        // a fresh page load starts with nothing to undo
+        const w4 = boot(JSON.stringify(stored(w3)));
+        click(w4, q(w4, '#data-button'));
+        check('steps are not kept across page loads', q(w4, '#undo-last').disabled);
+        check('no unexpected errors in section 71', errors.length === e, errors.slice(e).join(' | '));
+    }
+
     console.log(`\n==== ${passed} passed, ${failed} failed, ${errors.length} unexpected error(s) ====`);
     if (failures.length) console.log('FAILED:\n - ' + failures.join('\n - '));
     if (errors.length) console.log('ERRORS:\n' + errors.join('\n'));

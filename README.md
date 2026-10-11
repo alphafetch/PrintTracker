@@ -51,6 +51,7 @@ A personal 3D print and filament tracker for Bambu Lab, FlashForge and ELEGOO pr
 - **Printer hours:** with more than one printer, a dashboard panel shows hours printed per printer per month as small charts on one shared scale (so bars compare printers), following the dashboard date range. Only prints with a logged time count; prints without one are mentioned. It can be hidden from Customize.
 - **Duplicate-print warning:** saving a print with the same name (ignoring case and spaces), date, print time and total grams as one you already have asks "Save it again anyway?" first. Editing a print never matches itself. Two copies printed the same day with identical numbers are legitimate, so it only asks.
 - **Minimum stock:** in Settings > Preferences, set how many grams of each material to keep on hand (PLA, PETG, ABS, ASA, TPU, other). Stock is the grams left across active spools (archived ones do not count). A material under its minimum gets a dashboard panel and a shopping-list entry that says so, unless a spool of that material is already on the list as low or running out. Leave a box empty for no minimum.
+- **Undo last change:** the Data tab keeps your last 10 changes (edits, deletes, imports, merges, "Delete all data", settings) in memory, and one button steps back through them, with Redo on the message that follows. Sort order, filters and theme are left as they are. The steps are gone when you close or reload the page; use snapshots or a backup to go further back.
 - **Data check:** the Data tab can look for prints that use deleted spools, spools logged past their weight, archived spools still in the AMS, prints with no filament or a future date, and exact duplicate prints. Each has one fix or an Edit/Re-weigh shortcut, and fixes can be undone.
 - **Settings that worked:** on the Filament tab, how often each layer height, infill and supports combination succeeded per material (a print counts under the material it used the most of; only combinations with 3 or more prints are shown, and "0.2" and "0.2 mm" count as the same).
 - **Enough-filament check:** when a filament row in the print form uses more grams than the spool has left, the warning offers up to two other active spools of the same material that have enough (the nearest fit first). One click switches the row. This also applies to prints started from the queue.
@@ -128,6 +129,7 @@ js/slicerFile.js  js/slicerFill.js   read .gcode / .gcode.3mf and fill the print
 js/running.js     "Printing now" timers and the start popup
 js/bulk.js        select several prints
 js/bulkSpools.js  select several spools
+js/undo.js        undo the last few changes
 js/guide.js       getting-started checklist
 js/autoBackup.js  automatic backup to a folder
 js/leftover.js    ask how much is left when archiving a spool
