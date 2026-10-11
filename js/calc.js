@@ -877,3 +877,14 @@ export function printerHours(range = 'all') {
     }
     return Array.from(out.values());
 }
+
+const dupKey = (p) => [String(p.name || '').trim().replace(/\s+/g, ' ').toLowerCase(), p.date, validMinutes(Number(p.minutes)) || '', Math.round(totalGramsOfPrint(p) * 100)].join('|');
+
+/** The id of an existing print with the same name, date, print time and grams as `record`, or null. `excludeId` skips that print. */
+export function findDuplicatePrint(record, excludeId = null) {
+    const key = dupKey(record);
+    for (const [id, p] of Object.entries(state.prints)) {
+        if (id !== excludeId && isObject(p) && dupKey(p) === key) return id;
+    }
+    return null;
+}

@@ -1,5 +1,5 @@
 import { amsLoadedList, amsSlotLabel } from './ams.js';
-import { activeSpools, adjustOf, gramsUsedOfSpool, hasManyPrinters, printerIdOf, printerIds, printerName, remainingOf, spoolsWithEnough, tagKey, tagTotals, tagsOf, usageOf } from './calc.js';
+import { activeSpools, adjustOf, findDuplicatePrint, gramsUsedOfSpool, hasManyPrinters, printerIdOf, printerIds, printerName, remainingOf, spoolsWithEnough, tagKey, tagTotals, tagsOf, usageOf } from './calc.js';
 import { FAIL_REASONS, failReasonLabel } from './constants.js';
 import { renderAll } from './render.js';
 import { cleanFailReason, cleanProfile, cleanQueueSpec, cleanTags, saveState, state } from './state.js';
@@ -375,6 +375,8 @@ export function savePrint() {
         tags: cleanTags(tagsInput.value),
         printerId: hasManyPrinters() && printerIds().includes(printerSelect.value) ? printerSelect.value : ''
     };
+    const twin = findDuplicatePrint(record, editingPrintId);
+    if (twin && !confirm(`You already logged "${record.name}" on ${formatDate(record.date)} with the same print time and filament. Save it again anyway?`)) return false;
     if (editingPrintId && state.prints[editingPrintId]) {
         state.prints[editingPrintId] = record;
     } else {

@@ -4156,6 +4156,46 @@ const msg = () => q(w, '#data-message').textContent;
         check('no unexpected errors in section 67', errors.length === e, errors.slice(e).join(' | '));
     }
 
+    console.log('\n[68] Duplicate-print warning');
+    {
+        const e = errors.length;
+        const w = boot();
+        addSpool(w, { brand: 'Bambu Lab', color: 'Black', grams: '1000', date: '2026-09-01' });
+        openPrint(w); fillPrint(w, { name: 'Benchy', date: '2026-10-05', rows: [{ spoolIndex: 0, grams: 15 }] });
+        setVal(w, q(w, '#hours-ninput'), '1'); setVal(w, q(w, '#minutes-ninput'), '10');
+        w.__confirms.length = 0; savePrint(w);
+        check('the first print saves without a question', w.__confirms.length === 0 && Object.keys(stored(w).prints).length === 1);
+
+        openPrint(w); fillPrint(w, { name: '  benchy ', date: '2026-10-05', rows: [{ spoolIndex: 0, grams: 15 }] });
+        setVal(w, q(w, '#hours-ninput'), '1'); setVal(w, q(w, '#minutes-ninput'), '10');
+        w.__confirmAnswer = false; savePrint(w);
+        check('an identical print asks first, naming it and the date', w.__confirms.length === 1 && w.__confirms[0].includes('"benchy"') && w.__confirms[0].includes('10/05/2026'), w.__confirms.join('|'));
+        check('saying no keeps the dialog open and saves nothing', q(w, '#print-popup').style.display === 'block' && Object.keys(stored(w).prints).length === 1);
+        w.__confirmAnswer = true; w.__confirms.length = 0; savePrint(w);
+        check('saying yes saves the second copy', w.__confirms.length === 1 && Object.keys(stored(w).prints).length === 2 && q(w, '#print-popup').style.display === 'none');
+
+        // different details do not ask
+        for (const [label, name, date, grams, h2, m2] of [['grams', 'Benchy', '2026-10-05', 16, '1', '10'], ['date', 'Benchy', '2026-10-06', 15, '1', '10'], ['time', 'Benchy', '2026-10-05', 15, '1', '11'], ['name', 'Benchy 2', '2026-10-05', 15, '1', '10']]) {
+            openPrint(w); fillPrint(w, { name, date, rows: [{ spoolIndex: 0, grams }] });
+            setVal(w, q(w, '#hours-ninput'), h2); setVal(w, q(w, '#minutes-ninput'), m2);
+            w.__confirms.length = 0; savePrint(w);
+            check(`a different ${label} does not ask`, w.__confirms.length === 0, w.__confirms.join('|'));
+        }
+
+        // editing a print never matches itself, but can match another
+        click(w, q(w, '#prints-button'));
+        const cards = qa(w, '#print-list .print-card');
+        const benchy = cards.filter((c) => q(w, '.card-title', c).textContent.trim().toLowerCase() === 'benchy' && c.textContent.includes('10/05/2026') && c.textContent.includes('1h 10m'));
+        click(w, byText(w, 'button', 'Edit', benchy[0]));
+        w.__confirms.length = 0; savePrint(w);
+        check('editing one of two identical prints without changes does ask (the other is still identical)', w.__confirms.length === 1);
+        const solo = qa(w, '#print-list .print-card').find((c) => q(w, '.card-title', c).textContent === 'Benchy 2');
+        click(w, byText(w, 'button', 'Edit', solo));
+        w.__confirms.length = 0; savePrint(w);
+        check('editing a print with no twin never asks', w.__confirms.length === 0);
+        check('no unexpected errors in section 68', errors.length === e, errors.slice(e).join(' | '));
+    }
+
     console.log(`\n==== ${passed} passed, ${failed} failed, ${errors.length} unexpected error(s) ====`);
     if (failures.length) console.log('FAILED:\n - ' + failures.join('\n - '));
     if (errors.length) console.log('ERRORS:\n' + errors.join('\n'));
