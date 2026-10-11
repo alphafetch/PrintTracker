@@ -2,6 +2,7 @@ import { Sections } from './constants.js';
 import { setupPopups } from './popups.js';
 import { printPopup } from './printPopup.js';
 import './merge.js';
+import './compare.js';
 import './spoolsCsv.js';
 import './slicerFill.js';
 import { initAutoBackup } from './autoBackup.js';

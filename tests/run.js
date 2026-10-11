@@ -3965,6 +3965,78 @@ const msg = () => q(w, '#data-message').textContent;
         check('no unexpected errors in section 64', errors.length === e, errors.slice(e).join(' | '));
     }
 
+    console.log('\n[65] Compare a backup');
+    {
+        const e = errors.length;
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        const sp = (brand, color, extra = {}) => ({ brand, material: 'pla', color, startGrams: 1000, price: 20, date: '2026-09-01', ...extra });
+        const mine = { schemaVersion: 1,
+            spools: { a: sp('Bambu Lab', 'Black', { location: 'Shelf A' }), b: sp('Sunlu', 'White'), c: sp('Esun', 'Gray') },
+            prints: {
+                p1: { name: 'Benchy', date: '2026-10-01', result: true, usage: [{ spoolId: 'a', grams: 15 }] },
+                p2: { name: 'Gear', date: '2026-10-02', result: false, usage: [{ spoolId: 'a', grams: 30 }] },
+                p3: { name: 'Only mine', date: '2026-10-03', result: true, usage: [{ spoolId: 'b', grams: 5 }] }
+            },
+            queue: { q1: { name: 'Hook', link: '' }, q2: { name: 'Mine only', link: '' } } };
+        const file = JSON.parse(JSON.stringify(mine));
+        file.prints.p2.result = true; file.prints.p2.usage[0].grams = 28;     // changed
+        delete file.prints.p3; file.prints.p9 = { name: 'Friend print', date: '2026-10-05', result: true, usage: [{ spoolId: 'a', grams: 9 }] };
+        file.spools.a.location = 'Dry box';                                   // changed
+        delete file.spools.c; file.spools.z = sp('Overture', 'Teal');         // c only here, z only in the file
+        file.queue.q1.done = true;                                            // changed
+        delete file.queue.q2;
+        const w = boot(JSON.stringify(mine));
+        click(w, q(w, '#data-button'));
+        const before = JSON.stringify(stored(w));
+        const input = q(w, '#compare-file');
+        Object.defineProperty(input, 'files', { value: [new w.File([JSON.stringify(file)], 'friend.json')], configurable: true });
+        w.__confirms.length = 0;
+        input.dispatchEvent(new w.Event('change', { bubbles: true }));
+        await wait(200);
+        const panel = q(w, '#compare-panel');
+        check('the comparison appears without asking anything', !panel.hidden && w.__confirms.length === 0 && panel.textContent.includes('friend.json'));
+        const cell = (kind) => qa(w, `#compare-table tr[data-kind="${kind}"] td`).map((c) => c.textContent).join(',');
+        check('prints: 1 same, 1 only in file, 1 only here, 1 changed', cell('prints') === '1,1,1,1', cell('prints'));
+        check('spools: 1 same, 1 only in file, 1 only here, 1 changed', cell('spools') === '1,1,1,1', cell('spools'));
+        check('queue: 0 same, 0 only in file, 1 only here, 1 changed', cell('queue') === '0,0,1,1', cell('queue'));
+        const text = panel.textContent;
+        check('lists name the items on each side', text.includes('Friend print') && text.includes('Only mine') && text.includes('Overture, Teal') && text.includes('Esun, Gray') && text.includes('Mine only'), text);
+        check('changed prints say what differs and how', text.includes('Gear —') && text.includes('result: success in the file, failure here') && text.includes('filament: 28g in the file, 30g here'), text);
+        check('changed spools show the location', text.includes('location: Dry box in the file, Shelf A here'));
+        check('changed queue items show done', text.includes('done: yes in the file, no here'));
+        check('it suggests Merge for what is only in the file', text.includes('use Merge JSON'));
+        check('your data is untouched', JSON.stringify(stored(w)) === before && Object.keys(stored(w).prints).length === 3);
+        click(w, q(w, '#compare-close'));
+        check('Close comparison hides it', q(w, '#compare-panel').hidden && q(w, '#compare-panel').children.length === 0);
+
+        // identical file
+        const input2 = q(w, '#compare-file');
+        Object.defineProperty(input2, 'files', { value: [new w.File([JSON.stringify(mine)], 'same.json')], configurable: true });
+        input2.dispatchEvent(new w.Event('change', { bubbles: true }));
+        await wait(200);
+        check('an identical file says so', q(w, '.compare-same').textContent.includes('hold the same') && cell('prints') === '3,0,0,0', cell('prints'));
+        check('and offers no Merge hint', !q(w, '#compare-panel').textContent.includes('use Merge JSON'));
+
+        // bad files
+        for (const bad of ['not json', JSON.stringify({ prints: { x: { name: '', date: '2026-01-01' } }, spools: {} })]) {
+            const i3 = q(w, '#compare-file');
+            Object.defineProperty(i3, 'files', { value: [new w.File([bad], 'bad.json')], configurable: true });
+            i3.dispatchEvent(new w.Event('change', { bubbles: true }));
+            await wait(150);
+        }
+        check('an invalid file is refused with a reason', q(w, '#data-message').textContent.startsWith('Compare failed'), q(w, '#data-message').textContent);
+
+        // many items are capped
+        const big = JSON.parse(JSON.stringify(mine)); big.queue = {};
+        for (let i = 0; i < 20; i++) big.queue['n' + i] = { name: 'Item ' + i, link: '' };
+        const i4 = q(w, '#compare-file');
+        Object.defineProperty(i4, 'files', { value: [new w.File([JSON.stringify(big)], 'big.json')], configurable: true });
+        i4.dispatchEvent(new w.Event('change', { bubbles: true }));
+        await wait(200);
+        check('long lists are cut at 12 with a count of the rest', qa(w, '.compare-list[data-kind="queue"]')[0].querySelectorAll('li').length === 12 && q(w, '#compare-panel').textContent.includes('and 8 more'));
+        check('no unexpected errors in section 65', errors.length === e, errors.slice(e).join(' | '));
+    }
+
     console.log(`\n==== ${passed} passed, ${failed} failed, ${errors.length} unexpected error(s) ====`);
     if (failures.length) console.log('FAILED:\n - ' + failures.join('\n - '));
     if (errors.length) console.log('ERRORS:\n' + errors.join('\n'));

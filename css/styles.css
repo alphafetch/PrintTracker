@@ -1495,3 +1495,9 @@ html[data-density="compact"] .page-head { margin-bottom: 12px; }
 .views-form { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .views-form .text-input { width: 220px; max-width: 100%; }
 .views-bar .error-text { flex-basis: 100%; margin: 0; }
+
+/* Backup comparison */
+.compare-list { margin-top: 12px; }
+.compare-title { margin: 0 0 4px; font-size: 0.95rem; }
+.compare-items { margin: 0; padding-left: 20px; display: grid; gap: 2px; overflow-wrap: anywhere; }
+#compare-close { margin-top: 12px; }

@@ -11,17 +11,17 @@ import { $, notify, uid } from './util.js';
 const norm = (v) => String(v === undefined || v === null ? '' : v).trim().toLowerCase();
 const num = (v) => (Number.isFinite(v) ? String(Math.round(v * 100) / 100) : '');
 
-const spoolKey = (s) => [s.brand, s.material, s.color, s.date, num(s.startGrams), num(s.price)].map(norm).join('|');
-const printKey = (p) => [p.name, p.date, p.minutes || '', num(totalGramsOfPrint(p))].map(norm).join('|');
-const queueKey = (q) => [q.name, q.link].map(norm).join('|');
+export const spoolKey = (s) => [s.brand, s.material, s.color, s.date, num(s.startGrams), num(s.price)].map(norm).join('|');
+export const printKey = (p) => [p.name, p.date, p.minutes || '', num(totalGramsOfPrint(p))].map(norm).join('|');
+export const queueKey = (q) => [q.name, q.link].map(norm).join('|');
 
 /** Take one unused id off the list for this key (so two identical items are not both matched to one). */
-function takeMatch(pool, key) {
+export function takeMatch(pool, key) {
     const list = pool.get(key);
     return list && list.length > 0 ? list.shift() : null;
 }
 
-function poolOf(items, keyOf) {
+export function poolOf(items, keyOf) {
     const pool = new Map();
     for (const [id, item] of Object.entries(items)) {
         if (!item || typeof item !== 'object') continue;
