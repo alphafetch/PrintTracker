@@ -18,6 +18,7 @@ export function defaultSettings() {
         defaultSpoolGrams: 1000,
         backupDays: 30,
         dryDays: 30,
+        minStock: {},   // grams to keep on hand per material, e.g. { pla: 2000 }
         shortcuts: true,
         settingsVersion: SETTINGS_VERSION,
         customPresets: {},
@@ -68,6 +69,17 @@ export function cleanPrinters(raw) {
 }
 
 /** Turn anything (including junk from an import) into a complete, valid settings object. */
+/** Minimum stock in grams per material: { material: grams }, known materials only, 1 to 1,000,000. */
+export function cleanMinStock(raw) {
+    const out = {};
+    if (!isObject(raw)) return out;
+    for (const m of [...KNOWN_MATERIALS, 'other']) {
+        const n = Number(raw[m]);
+        if (raw[m] !== null && raw[m] !== '' && typeof raw[m] !== 'boolean' && Number.isFinite(n) && n >= 1) out[m] = Math.round(Math.min(n, 1000000));
+    }
+    return out;
+}
+
 export function cleanSettings(raw) {
     const d = defaultSettings();
     const s = isObject(raw) ? raw : {};
@@ -89,6 +101,7 @@ export function cleanSettings(raw) {
         defaultSpoolGrams: Math.round(clampNum(s.defaultSpoolGrams, 0, 100000, d.defaultSpoolGrams)),
         backupDays: Math.round(clampNum(s.backupDays, 0, 365, d.backupDays)),
         dryDays: Math.round(clampNum(s.dryDays, 0, 365, d.dryDays)),
+        minStock: cleanMinStock(s.minStock),
         shortcuts: typeof s.shortcuts === 'boolean' ? s.shortcuts : d.shortcuts,
         settingsVersion: SETTINGS_VERSION,
         customPresets: cleanPresets(s.customPresets),

@@ -35,6 +35,15 @@ export function buildPreferenceSettings(root) {
             () => state.settings.dryDays, (v) => commitSettings((st) => { st.dryDays = v === null ? 0 : v; }))));
     root.appendChild(filament);
 
+    const stock = settingCard('Minimum stock', 'Grams of each material to keep on hand, counted across your active spools. Under the minimum, the dashboard and shopping list say so. Leave a box empty for no minimum.');
+    for (const m of [...KNOWN_MATERIALS, 'other']) {
+        stock.appendChild(settingRow(`set-min-${m}`, m.toUpperCase(), null,
+            numberField(`set-min-${m}`, { min: 1, max: 1000000, step: 1, placeholder: 'none', unit: 'g' },
+                () => state.settings.minStock[m] ?? null,
+                (v) => commitSettings((st) => { const next = { ...st.minStock }; if (v === null) delete next[m]; else next[m] = v; st.minStock = next; }))));
+    }
+    root.appendChild(stock);
+
     const safety = settingCard('Backups and shortcuts');
     safety.appendChild(settingRow('set-backup-days', 'Backup reminder', 'Show a reminder on the dashboard when your last export is older than this. Use 0 to turn it off.',
         numberField('set-backup-days', { min: 0, max: 365, step: 1, placeholder: '30', unit: 'days' },

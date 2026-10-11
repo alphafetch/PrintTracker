@@ -522,7 +522,17 @@ export function shoppingList(today = todayLocal()) {
         items.push({ kind: 'favorite', id, spool, key, left: 0, prints: n, reorder: false, forecast: null });
     }
 
-    const order = { low: 0, soon: 1, favorite: 2 };
+    // materials under the minimum stock; skipped when a spool of that material is already on the list
+    const listed = new Set(items.map((i) => materialKey(i.spool)));
+    for (const { material, have, min } of stockShortfalls()) {
+        if (listed.has(material)) continue;
+        const ofMaterial = Object.entries(state.spools).filter(([, s]) => isObject(s) && materialKey(s) === material);
+        if (ofMaterial.length === 0) continue;
+        const newest = ofMaterial.sort((a, b) => Number(Boolean(a[1].archived)) - Number(Boolean(b[1].archived)) || String(b[1].date || '').localeCompare(String(a[1].date || '')))[0];
+        items.push({ kind: 'minimum', id: newest[0], spool: newest[1], key: colorKey(newest[1]), left: have, min, reorder: false, forecast: null });
+    }
+
+    const order = { low: 0, soon: 1, minimum: 2, favorite: 3 };
     items.sort((a, b) => order[a.kind] - order[b.kind] || Number(b.reorder) - Number(a.reorder) || a.left - b.left
         || String(a.spool.brand).localeCompare(String(b.spool.brand)));
     return items;
@@ -887,4 +897,25 @@ export function findDuplicatePrint(record, excludeId = null) {
         if (id !== excludeId && isObject(p) && dupKey(p) === key) return id;
     }
     return null;
+}
+
+/** Grams still on active (not archived) spools, per material key ("pla", "petg"...). */
+export function stockByMaterial() {
+    const out = {};
+    for (const [id, s] of activeSpools()) {
+        const key = materialKey(s);
+        out[key] = (out[key] || 0) + Math.max(0, remainingOf(id, s));
+    }
+    return out;
+}
+
+/** Materials whose stock is under the minimum set in Settings: [{ material, have, min }], biggest shortfall first. */
+export function stockShortfalls() {
+    const have = stockByMaterial();
+    const out = [];
+    for (const [material, min] of Object.entries(state.settings.minStock || {})) {
+        const got = have[material] || 0;
+        if (min > 0 && got < min) out.push({ material, have: got, min });
+    }
+    return out.sort((a, b) => (b.min - b.have) - (a.min - a.have) || a.material.localeCompare(b.material));
 }

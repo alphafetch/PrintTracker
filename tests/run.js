@@ -4196,6 +4196,59 @@ const msg = () => q(w, '#data-message').textContent;
         check('no unexpected errors in section 68', errors.length === e, errors.slice(e).join(' | '));
     }
 
+    console.log('\n[69] Minimum stock per material');
+    {
+        const e = errors.length;
+        const sp = (brand, color, material, grams, extra = {}) => ({ brand, material, color, startGrams: grams, price: 20, date: '2026-09-01', ...extra });
+        const base = { schemaVersion: 1, prints: {}, spools: {
+            a: sp('Bambu Lab', 'Black', 'pla', 1000, { adjust: -300 }),   // 700
+            b: sp('Sunlu', 'White', 'pla', 1000, { adjust: -500 }),       // 500
+            c: sp('Esun', 'Clear', 'petg', 1000),                         // 1000
+            d: sp('Old', 'Gray', 'pla', 1000, { archived: true }),        // archived: not counted
+            e: sp('Elegoo', 'Red', 'tpu', 500)                            // 500
+        } };
+        const w = boot(JSON.stringify(base));
+        click(w, q(w, '#settings-button')); click(w, q(w, '#settings-tab-preferences'));
+        check('Settings has a box per material under Minimum stock', ['pla', 'petg', 'abs', 'asa', 'tpu', 'other'].every((m) => !!q(w, `#set-min-${m}`)));
+        check('no minimum means no warning', !q(w, '#stock-panel'));
+        setVal(w, q(w, '#set-min-pla'), '2000');
+        setVal(w, q(w, '#set-min-petg'), '500');
+        check('the minimums are saved', stored(w).settings.minStock.pla === 2000 && stored(w).settings.minStock.petg === 500, JSON.stringify(stored(w).settings.minStock));
+        click(w, q(w, '#dash-button'));
+        const panel = q(w, '#stock-panel');
+        check('the dashboard names materials under their minimum, not those above', !!panel && qa(w, '.list-row', panel).length === 1 && panel.textContent.includes('PLA') && !panel.textContent.includes('PETG'), panel && panel.textContent);
+        check('it counts active spools only: 700 + 500 = 1200g, 800g short', panel.textContent.includes('1200g on active spools, minimum 2000g') && panel.textContent.includes('800g short'), panel.textContent);
+
+        click(w, q(w, '#fila-button'));
+        const shop = q(w, '#shopping');
+        check('the shopping list gets one entry for it, with the reason', shop.textContent.includes('Under minimum stock') && shop.textContent.includes('only 1200g of PLA in stock, your minimum is 2000g'), shop.textContent);
+        // the same material is not listed twice when a PLA spool is already low
+        const st = stored(w); st.spools.b.adjust = -950;   // 50 left: low
+        const w2 = boot(JSON.stringify(st));
+        click(w2, q(w2, '#fila-button'));
+        check('when a spool of that material is already on the list, no second PLA entry', !q(w2, '#shopping').textContent.includes('Under minimum stock') && q(w2, '#shopping').textContent.includes('Running low'));
+        check('the dashboard panel still shows the shortfall', !!(click(w2, q(w2, '#dash-button')), q(w2, '#stock-panel')));
+
+        // clearing a box removes the minimum
+        click(w, q(w, '#settings-button')); click(w, q(w, '#settings-tab-preferences'));
+        setVal(w, q(w, '#set-min-pla'), '');
+        check('emptying a box removes that minimum and the panel', stored(w).settings.minStock.pla === undefined && !(click(w, q(w, '#dash-button')), q(w, '#stock-panel')));
+        // restocking above the minimum clears it
+        click(w, q(w, '#settings-button')); click(w, q(w, '#settings-tab-preferences'));
+        setVal(w, q(w, '#set-min-pla'), '1100');
+        click(w, q(w, '#dash-button'));
+        check('stock above the minimum shows no warning (1200 >= 1100)', !q(w, '#stock-panel'));
+
+        // junk is cleaned on load
+        const bad = JSON.parse(JSON.stringify(base)); bad.settings = { minStock: { pla: '800', petg: -5, abs: 'x', asa: true, tpu: 5000000, nylon: 100, other: 0, __proto__: 1 } };
+        const w3 = boot(JSON.stringify(bad));
+        click(w3, q(w3, '#settings-button')); click(w3, q(w3, '#settings-tab-preferences'));
+        setVal(w3, q(w3, '#set-low'), '25');   // forces a save
+        const ms = stored(w3).settings.minStock;
+        check('bad minimums are dropped, big ones capped, numeric text accepted', JSON.stringify(ms) === JSON.stringify({ pla: 800, tpu: 1000000 }), JSON.stringify(ms));
+        check('no unexpected errors in section 69', errors.length === e, errors.slice(e).join(' | '));
+    }
+
     console.log(`\n==== ${passed} passed, ${failed} failed, ${errors.length} unexpected error(s) ====`);
     if (failures.length) console.log('FAILED:\n - ' + failures.join('\n - '));
     if (errors.length) console.log('ERRORS:\n' + errors.join('\n'));

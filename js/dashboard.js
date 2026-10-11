@@ -1,6 +1,6 @@
 import { buildAchievementsPanel } from './achievements.js';
 import { findMaterial } from './catalog.js';
-import { calcStats, describeDays, hasManyPrinters, mostPrinted, printerHours, hardwareCost, spoolForecast, totalGramsOfPrint } from './calc.js';
+import { calcStats, describeDays, hasManyPrinters, mostPrinted, printerHours, stockShortfalls, hardwareCost, spoolForecast, totalGramsOfPrint } from './calc.js';
 import { DASH_ACHIEVEMENTS, failReasonLabel, MATERIAL_COLORS, MONTHS, RANGES, Sections } from './constants.js';
 import { openPrintPopup } from './printPopup.js';
 import { emptyState_, makeBadge, plural } from './render.js';
@@ -446,6 +446,26 @@ export function renderDashboard() {
             panel.appendChild(row);
         }
         add('upNext', panel);
+    }
+
+    // --- Under the minimum stock set in Settings ---
+    const short = stockShortfalls();
+    if (short.length > 0) {
+        const panel = dashPanel('Under your minimum stock');
+        panel.id = 'stock-panel';
+        for (const { material, have, min } of short) {
+            const row = h('button', 'list-row list-button');
+            row.type = 'button';
+            row.dataset.material = material;
+            const text = h('span', 'list-main');
+            text.appendChild(h('span', 'list-title', material.toUpperCase()));
+            text.appendChild(h('span', 'list-sub', `${fmtGrams(have)}g on active spools, minimum ${fmtGrams(min)}g`));
+            row.appendChild(text);
+            row.appendChild(makeBadge(`${fmtGrams(min - have)}g short`, 'amber'));
+            row.addEventListener('click', () => showTab(Sections.FILA));
+            panel.appendChild(row);
+        }
+        root.appendChild(panel);
     }
 
     const cols = h('div', 'dash-grid');
