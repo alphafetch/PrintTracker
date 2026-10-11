@@ -5,14 +5,18 @@
   "description": "A personal 3D print and filament tracker (plain HTML, CSS and JavaScript). This package.json is only for the tests; the app itself has no build step.",
   "scripts": {
     "test": "node tests/run.js",
+    "test:e2e": "node tests/e2e.js",
     "lint": "eslint js tests"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "devDependencies": {
     "esbuild": "^0.28.2",
     "eslint": "^8.57.1",
     "globals": "^17.13.0",
-    "jsdom": "^29.1.1"
+    "jsdom": "^29.1.1",
+    "playwright": "^1.64.0"
   },
   "license": "MIT"
 }

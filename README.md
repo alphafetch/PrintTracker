@@ -98,9 +98,13 @@ The app has no build step, but there is a test suite that loads the real page in
 npm install
 npm test          # run the tests
 npm run lint      # ESLint over js/ and tests/
+npx playwright install chromium   # once, for the real-browser test
+npm run test:e2e  # click through the main flows in a real Chromium
 ```
 
 On every push GitHub also runs both (`.github/workflows/test.yml`). `tests/run.js` bundles `js/main.js` with esbuild in memory, loads `index.html` into jsdom, and checks the behaviour of every tab, popup, import and export path, along with accessibility basics (names on controls, focus handling) and a few CSS rules. It prints `ok` or `FAIL` for each check and exits with an error code if any fail.
+
+`npm run test:e2e` runs `tests/e2e.js`, a shorter check in a real browser (Playwright and Chromium). It starts a small local server, then adds a spool, logs a print, searches, saves a filter, selects spools, imports a CSV, merges a backup, uses Undo, reloads and checks the phone-sized layout for sideways scrolling. It catches what jsdom can't (real layout, real file inputs and dialogs). It needs the Chromium download, so GitHub does not run it; set `E2E_CHROMIUM` to use a browser you already have.
 
 ## Project structure
 
@@ -108,6 +112,7 @@ On every push GitHub also runs both (`.github/workflows/test.yml`). `tests/run.j
 index.html
 css/styles.css
 tests/run.js      the test suite (see Tests)
+tests/e2e.js      the real-browser test (see Tests)
 js/main.js        start-up
 js/ams.js         AMS units and slots
 js/achievements.js  achievements
