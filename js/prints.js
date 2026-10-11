@@ -1,4 +1,4 @@
-import { costOfPrint, energyCostOfPrint, hasManyPrinters, printerIdOf, printerName, tagKey, tagTotals, tagsOf, totalGramsOfPrint, usageOf, wearCostOfPrint } from './calc.js';
+import { attemptInfo, costOfPrint, energyCostOfPrint, hasManyPrinters, printerIdOf, printerName, tagKey, tagTotals, tagsOf, totalGramsOfPrint, usageOf, wearCostOfPrint } from './calc.js';
 import { DEFAULT_SWATCH, failReasonLabel, Sections } from './constants.js';
 import { isSelected, isSelecting, setVisible, toggleSelected } from './bulk.js';
 import { openPrintPopup } from './printPopup.js';
@@ -185,10 +185,11 @@ export function renderPrints() {
         printList.appendChild(emptyState_('No prints match your search or filter.', 'Try a different word or reset the filters.'));
         return;
     }
-    for (const [id, print] of entries) printList.appendChild(buildPrintCard(id, print));
+    const attempts = attemptInfo();
+    for (const [id, print] of entries) printList.appendChild(buildPrintCard(id, print, attempts.get(id)));
 }
 
-export function buildPrintCard(id, p) {
+export function buildPrintCard(id, p, attempt = null) {
     const card = h('article', 'row-card print-card');
     card.dataset.id = id;
     card.classList.add(p.result ? 'is-success' : 'is-failure');
@@ -240,6 +241,11 @@ export function buildPrintCard(id, p) {
         pr.appendChild(icon('cube'));
         pr.append(printerName(printerIdOf(p)));
         meta.appendChild(pr);
+    }
+    if (attempt) {
+        const a = h('span', 'meta-item print-attempt', `Attempt ${attempt.n} of ${attempt.of}`);
+        a.title = `${attempt.failed} of the ${attempt.of} prints with this name failed`;
+        meta.appendChild(a);
     }
     const safeLink = normalizeLink(p.link);
     if (safeLink) meta.appendChild(makeLink(safeLink));
@@ -297,6 +303,14 @@ export function buildPrintCard(id, p) {
     again.title = 'Log a new print with the same details';
     again.addEventListener('click', () => openPrintPopup({ copyFromId: id }));
     buttons.appendChild(again);
+
+    if (!p.result) {
+        const retry = h('button', 'btn btn-outline btn-small print-retry', 'Retry');
+        retry.type = 'button';
+        retry.title = 'Log a new attempt with the same filament and settings';
+        retry.addEventListener('click', () => openPrintPopup({ copyFromId: id, retry: true }));
+        buttons.appendChild(retry);
+    }
 
     const queue = h('button', 'btn btn-outline btn-small print-queue-add', 'Add to queue');
     queue.type = 'button';

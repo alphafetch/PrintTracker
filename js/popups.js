@@ -1,12 +1,12 @@
 import { Sections, TABS } from './constants.js';
 import { closeLabelPopup, labelPopupEl, labelPopupOpen } from './labels.js';
 import { closePrintPopup, openPrintPopup, printPopup } from './printPopup.js';
-import { printSearch } from './prints.js';
 import { openSettings } from './settings.js';
 import { closeSpoolPopup, openSpoolPopup, spoolPopup } from './spoolPopup.js';
 import { state } from './state.js';
 import { closeSummaryPopup, summaryPopupEl, summaryPopupOpen } from './summary.js';
 import { showTab, toggleTheme } from './tabs.js';
+import { closeSearchPopup, openSearchPopup, searchPopupEl, searchPopupOpen } from './search.js';
 import { closeCustomizePopup, customizePopupEl, customizePopupOpen } from './customize.js';
 import { closeLeftoverPopup, leftoverPopupEl, leftoverPopupOpen } from './leftover.js';
 import { closeStartPopup, startPopupEl, startPopupOpen } from './running.js';
@@ -43,6 +43,7 @@ export function setupPopups() {
             closeStartPopup();
             closeLeftoverPopup();
             closeCustomizePopup();
+            closeSearchPopup();
         } else if (e.key === 'Tab') {
             if (printPopup.style.display === 'block') trapFocus(printPopup, e);
             else if (spoolPopup.style.display === 'block') trapFocus(spoolPopup, e);
@@ -52,6 +53,7 @@ export function setupPopups() {
             else if (startPopupOpen()) trapFocus(startPopupEl(), e);
             else if (leftoverPopupOpen()) trapFocus(leftoverPopupEl(), e);
             else if (customizePopupOpen()) trapFocus(customizePopupEl(), e);
+            else if (searchPopupOpen()) trapFocus(searchPopupEl(), e);
         } else {
             handleShortcut(e);
         }
@@ -62,14 +64,14 @@ export const SHORTCUTS = [
     ['1 - 7', 'Switch tabs'],
     ['N', 'New print'],
     ['S', 'Add a spool'],
-    ['/', 'Search prints'],
+    ['/', 'Search everything'],
     ['T', 'Toggle theme'],
     ['?', 'Open these shortcuts']
 ];
 
 export function handleShortcut(e) {
     if (!state.settings.shortcuts || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (printPopup.style.display === 'block' || spoolPopup.style.display === 'block' || labelPopupOpen() || summaryPopupOpen() || weighPopupOpen() || startPopupOpen() || leftoverPopupOpen() || customizePopupOpen()) return;
+    if (printPopup.style.display === 'block' || spoolPopup.style.display === 'block' || labelPopupOpen() || summaryPopupOpen() || weighPopupOpen() || startPopupOpen() || leftoverPopupOpen() || customizePopupOpen() || searchPopupOpen()) return;
     const tag = e.target && e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
 
@@ -87,8 +89,7 @@ export function handleShortcut(e) {
         openSpoolPopup();
     } else if (key === '/') {
         e.preventDefault();
-        showTab(Sections.PRINTS);
-        printSearch.focus();
+        openSearchPopup();
     } else if (key === 't') {
         toggleTheme();
     } else if (key === '?') {

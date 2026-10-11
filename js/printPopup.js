@@ -1,9 +1,9 @@
 import { amsLoadedList, amsSlotLabel } from './ams.js';
-import { activeSpools, adjustOf, gramsUsedOfSpool, hasManyPrinters, printerIdOf, printerIds, printerName, remainingOf, tagKey, tagTotals, tagsOf, usageOf } from './calc.js';
-import { FAIL_REASONS } from './constants.js';
+import { activeSpools, adjustOf, gramsUsedOfSpool, hasManyPrinters, printerIdOf, printerIds, printerName, remainingOf, spoolsWithEnough, tagKey, tagTotals, tagsOf, usageOf } from './calc.js';
+import { FAIL_REASONS, failReasonLabel } from './constants.js';
 import { renderAll } from './render.js';
 import { cleanFailReason, cleanProfile, cleanQueueSpec, cleanTags, saveState, state } from './state.js';
-import { $, clearError, fmtGrams, h, isObject, isValidDate, makeSwatch, normalizeLink, notify, showError, spoolHex, todayLocal, uid, validMinutes } from './util.js';
+import { $, clearError, fmtGrams, formatDate, h, isObject, isValidDate, makeSwatch, normalizeLink, notify, showError, spoolHex, todayLocal, uid, validMinutes } from './util.js';
 
 // ---------- Print popup (create and edit) ----------
 
@@ -64,9 +64,10 @@ export function updateBodyLock() {
  *   name, link  pre-fill for a new print (used by the queue)
  *   spec        more pre-fill from a queue item (print time, spools, profile, notes, printer)
  *   queueId     queue item to tick off after saving
+ *   retry       with copyFromId: a new attempt at a failed print (its notes are replaced by a note about the failure)
  *   runningId   running timer to remove after saving; `failed` opens it as a failed print
  */
-export function openPrintPopup({ printId = null, copyFromId = null, name = '', link = '', queueId = null, spec = null, runningId = null, failed = false } = {}) {
+export function openPrintPopup({ printId = null, copyFromId = null, name = '', link = '', queueId = null, spec = null, runningId = null, failed = false, retry = false } = {}) {
     if (!printId && activeSpools().length === 0) {
         notify('Add a filament spool first (Filament tab).', true);
         return;
@@ -95,6 +96,10 @@ export function openPrintPopup({ printId = null, copyFromId = null, name = '', l
     hoursInput.value = minutes ? String(Math.floor(minutes / 60)) : '';
     minutesInput.value = minutes ? String(minutes % 60) : '';
     notesInput.value = source && typeof source.notes === 'string' ? source.notes : '';
+    if (retry && !print && source) {
+        const why = failReasonLabel(source.failReason);
+        notesInput.value = `Retry of the print from ${formatDate(source.date)} that failed${why ? ` (${why.toLowerCase()})` : ''}.`;
+    }
     failSelect.value = print && !print.result ? cleanFailReason(print.failReason, false) : '';
     const profile = source ? cleanProfile(source.profile) : null;   // "Print again" keeps the profile
     for (const key of Object.keys(profileInputs)) profileInputs[key].value = profile ? profile[key] : '';
@@ -281,6 +286,8 @@ export function updateRowControls() {
     addRowButton.disabled = rows.length >= activeSpools().length;
 }
 
+const gramsInputOf = (row) => row.querySelector('input');
+
 /** Non-blocking warning when a row uses more grams than the spool has left. */
 export function updateRowHint(row) {
     const select = row.querySelector('select');
@@ -291,7 +298,20 @@ export function updateRowHint(row) {
     if (spool && Number.isFinite(grams) && grams > 0) {
         const left = (Number(spool.startGrams) || 0) + adjustOf(spool) - gramsUsedOfSpool(select.value, editingPrintId);
         if (grams > left) {
-            hint.textContent = `Heads up: only ~${fmtGrams(Math.max(left, 0))}g left on this spool. You can still save.`;
+            hint.replaceChildren(`Heads up: only ~${fmtGrams(Math.max(left, 0))}g left on this spool. You can still save.`);
+            const taken = new Set(Array.from(rowList.querySelectorAll('select'), (el) => el.value));
+            for (const { id, spool: other, left: otherLeft } of spoolsWithEnough(select.value, grams, taken).slice(0, 2)) {
+                const swap = h('button', 'btn btn-outline btn-small row-swap');
+                swap.type = 'button';
+                swap.dataset.spool = id;
+                swap.textContent = `Use ${other.brand}, ${other.color} (~${fmtGrams(otherLeft)}g left)`;
+                swap.addEventListener('click', () => {
+                    fillSpoolSelect(select, id);
+                    updateRowHint(row);
+                    gramsInputOf(row).focus();
+                });
+                hint.appendChild(swap);
+            }
             hint.hidden = false;
             return;
         }

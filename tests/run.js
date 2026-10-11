@@ -3629,6 +3629,224 @@ const msg = () => q(w, '#data-message').textContent;
         check('no unexpected errors in section 58', errors.length === e, errors.slice(e).join(' | '));
     }
 
+    console.log('\n[59] Enough-filament check');
+    {
+        const e = errors.length;
+        const sp = (brand, color, material, used) => ({ brand, material, color, startGrams: 1000, date: '2026-09-01', ...(used ? { adjust: -used } : {}) });
+        const w = boot(JSON.stringify({ schemaVersion: 1, prints: {}, spools: {
+            a: sp('Bambu Lab', 'Black', 'pla', 950),     // 50 left
+            b: sp('Sunlu', 'White', 'pla', 700),         // 300 left
+            c: sp('Esun', 'Gray', 'pla', 0),             // 1000 left
+            d: sp('Esun', 'Red', 'petg', 0),             // other material
+            e: sp('Elegoo', 'Blue', 'pla', 100)          // 900 left (archived below)
+        } }));
+        const st = stored(w); st.spools.e.archived = true;
+        const w2 = boot(JSON.stringify(st));
+        openPrint(w2);
+        const row = () => qa(w2, '.filament-row')[0];
+        const sel = () => q(w2, 'select', row());
+        sel().value = 'a'; sel().dispatchEvent(new w2.Event('change', { bubbles: true }));
+        setVal(w2, q(w2, 'input', row()), '20');
+        check('no warning when the spool has enough', q(w2, '.row-hint', row()).hidden);
+        setVal(w2, q(w2, 'input', row()), '120');
+        const hint = q(w2, '.row-hint', row());
+        check('a short spool shows the warning', !hint.hidden && hint.textContent.includes('only ~50g left'));
+        const swaps = qa(w2, '.row-swap', hint);
+        check('suggests same-material spools with enough, smallest sufficient first, no archived or other materials', swaps.map((b) => b.dataset.spool).join() === 'b,c', swaps.map((b) => b.textContent).join('|'));
+        check('suggestion shows the name and grams left', swaps[0].textContent === 'Use Sunlu, White (~300g left)', swaps[0].textContent);
+        click(w2, swaps[0]);
+        check('clicking a suggestion switches the spool and keeps the grams', sel().value === 'b' && q(w2, 'input', row()).value === '120' && q(w2, '.row-hint', row()).hidden);
+        setVal(w2, q(w2, 'input', row()), '400');
+        check('the new spool can be warned about too, leaving only Esun', qa(w2, '.row-swap', q(w2, '.row-hint', row())).map((b) => b.dataset.spool).join() === 'c');
+        click(w2, q(w2, '#add-filament-row-button'));
+        const row2 = qa(w2, '.filament-row')[1];
+        check('a spool already used in another row is not suggested', !qa(w2, '.row-swap', q(w2, '.row-hint', row())).some((b) => b.dataset.spool === q(w2, 'select', row2).value));
+        setVal(w2, q(w2, 'input', row()), '1500');
+        check('when nothing has enough, only the warning shows', !q(w2, '.row-hint', row()).hidden && qa(w2, '.row-swap', q(w2, '.row-hint', row())).length === 0);
+        check('no unexpected errors in section 59', errors.length === e, errors.slice(e).join(' | '));
+    }
+
+    console.log('\n[60] Spools CSV export and import');
+    {
+        const e = errors.length;
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        const readBlob = (w, blob) => new Promise((res) => { const r = new w.FileReader(); r.onload = () => res(String(r.result)); r.readAsText(blob); });
+        const importCsv = async (w, text) => {
+            const input = q(w, '#import-spools-csv-file');
+            Object.defineProperty(input, 'files', { value: [new w.File([text], 's.csv')], configurable: true });
+            input.dispatchEvent(new w.Event('change', { bubbles: true }));
+            await wait(150);
+        };
+        const base = { schemaVersion: 1, prints: { p1: { name: 'Benchy', date: '2026-10-01', result: true, usage: [{ spoolId: 'a', grams: 100 }] } }, spools: {
+            a: { brand: 'Bambu Lab', material: 'pla', color: 'Black', hex: '#1c1c1e', startGrams: 1000, price: 22.5, date: '2026-09-01', location: 'Shelf A' },
+            b: { brand: 'Sunlu, Inc', material: 'petg', color: '=Red', startGrams: 750, price: 18, date: '2026-09-05', archived: true, leftover: 120 },
+            c: { brand: 'Esun', material: 'pla', color: 'Gray', startGrams: 1000, price: null, date: '2026-09-07' }
+        } };
+        const w = boot(JSON.stringify(base));
+        let blob = null;
+        w.URL.createObjectURL = (b) => { blob = b; return 'blob:fake'; };
+        click(w, q(w, '#data-button'));
+        click(w, q(w, '#export-spools-csv-button'));
+        const csv = await readBlob(w, blob);
+        check('export has a header and one row per spool', csv.split('\r\n').filter(Boolean).length === 4 && csv.includes('Brand,Material,Color,Hex,Weight (g),Price,Date bought,Location,Grams left,Status'), csv);
+        check('grams left, status, location and leftover are in the file', csv.includes('Bambu Lab,pla,Black,#1c1c1e,1000,22.5,2026-09-01,Shelf A,900,Active') && csv.includes('Archived,,,120'), csv);
+        check('commas are quoted and formulas are defused', csv.includes('"Sunlu, Inc"') && csv.includes("'=Red"), csv);
+
+        // round trip: importing your own export adds nothing
+        w.__confirms.length = 0;
+        await importCsv(w, csv);
+        check('importing your own export finds only duplicates', w.__confirms.length === 0 && q(w, '#data-message').textContent.startsWith('Nothing new to add') && q(w, '#data-message').textContent.includes('3 already here'), q(w, '#data-message').textContent);
+
+        // new rows from a spreadsheet
+        const sheet = [
+            'Manufacturer;Type;Colour;Weight;Cost;Bought;Storage;Remaining;Status',
+            'Polymaker;PLA;Teal;1000;19.99;10/02/2026;Dry box;640;',
+            'Polymaker;PLA;Teal;1000;19.99;10/02/2026;Dry box;640;',   // second identical roll: both are new
+            'Esun;pla;Gray;1000;;2026-09-07;;;',                      // already here (price blank)
+            ';pla;NoBrand;1000;;;;;',                                  // invalid
+            'Elegoo;pla;Blue;0;;;;;',                                  // invalid weight
+            'Overture;tpu;Orange;500;25;2026-10-03;;;archived'
+        ].join('\n');
+        await importCsv(w, sheet);
+        check('asks first with counts', w.__confirms.length === 1 && w.__confirms[0].includes('Add 3 spools') && w.__confirms[0].includes('1 already here') && w.__confirms[0].includes('2 without'), w.__confirms.join('|'));
+        const sp = Object.values(stored(w).spools);
+        check('new spools are added, identical rows both kept', sp.length === 6 && sp.filter((s) => s.color === 'Teal').length === 2);
+        const teal = sp.find((s) => s.color === 'Teal');
+        check('semicolon files, other column names and US dates are read', teal.brand === 'Polymaker' && teal.material === 'pla' && teal.startGrams === 1000 && teal.price === 19.99 && teal.date === '2026-10-02' && teal.location === 'Dry box', JSON.stringify(teal));
+        check('grams left below the weight becomes a correction', teal.adjust === -360, JSON.stringify(teal));
+        check('a colour name gets a guessed swatch', /^#[0-9a-f]{6}$/.test(sp.find((s) => s.color === 'Orange').hex) || sp.find((s) => s.color === 'Orange').hex === '', sp.find((s) => s.color === 'Orange').hex);
+        check('status archived is kept', sp.find((s) => s.color === 'Orange').archived === true);
+        click(w, q(w, '#fila-button'));
+        check('the Filament tab shows the left-over grams (1000 - 360 = 640)', qa(w, '#spools .spool-card').some((c) => c.textContent.includes('Teal') && c.textContent.includes('640')));
+        click(w, q(w, '#data-button'));
+        click(w, byText(w, 'button', 'Undo', q(w, '#toast')));
+        check('Undo removes what was added', Object.keys(stored(w).spools).length === 3);
+
+        // errors
+        await importCsv(w, 'Foo,Bar\n1,2');
+        check('a file without the needed columns is refused', q(w, '#data-message').textContent.startsWith('Spool import failed') && Object.keys(stored(w).spools).length === 3, q(w, '#data-message').textContent);
+        w.__confirmAnswer = false;
+        await importCsv(w, sheet);
+        check('declining changes nothing', q(w, '#data-message').textContent.includes('cancelled') && Object.keys(stored(w).spools).length === 3);
+        const w2 = boot();
+        click(w2, q(w2, '#data-button'));
+        click(w2, q(w2, '#export-spools-csv-button'));
+        check('exporting with no spools says so', q(w2, '#data-message').textContent.includes('no spools'));
+        check('no unexpected errors in section 60', errors.length === e, errors.slice(e).join(' | '));
+    }
+
+    console.log('\n[61] Search everything');
+    {
+        const e = errors.length;
+        const w = boot(JSON.stringify({ schemaVersion: 1,
+            spools: {
+                a: { brand: 'Bambu Lab', material: 'pla', color: 'Black', startGrams: 1000, date: '2026-09-01', location: 'Shelf A' },
+                b: { brand: 'Sunlu', material: 'petg', color: 'Red', startGrams: 1000, date: '2026-09-02', archived: true }
+            },
+            prints: {
+                p1: { name: 'Phone stand', date: '2026-10-01', result: true, usage: [{ spoolId: 'a', grams: 20 }], tags: ['gift'] },
+                p2: { name: 'Gear box', date: '2026-10-03', result: false, usage: [{ spoolId: 'b', grams: 20 }], notes: 'stand-off failed' },
+                p3: { name: 'Vase', date: '2026-10-02', result: true, usage: [{ spoolId: 'a', grams: 20 }], tags: ['Gift', 'decor'] }
+            },
+            queue: { q1: { name: 'Stand for tablet', link: 'https://example.com/tablet' }, q2: { name: 'Hook', link: '' } } }));
+        const key = (k, target) => (target || w.document).dispatchEvent(new w.KeyboardEvent('keydown', { key: k, bubbles: true }));
+        key('/');
+        const pop = q(w, '#search-popup');
+        check('the / key opens the search dialog and focuses the box', pop.style.display === 'block' && w.document.activeElement === q(w, '#search-all-input'));
+        check('it is a proper dialog', pop.getAttribute('role') === 'dialog' && pop.getAttribute('aria-modal') === 'true');
+        check('an empty box shows a hint, not results', qa(w, '.search-result').length === 0 && q(w, '#search-results').textContent.includes('Type to search'));
+        const type = (t) => setVal(w, q(w, '#search-all-input'), t);
+        const group = (g) => qa(w, `.search-group[data-group="${g}"] .search-result`).map((r) => r.querySelector('.list-title').textContent);
+        type('stand');
+        check('prints match on name and notes, newest first', group('prints').join('|') === 'Gear box|Phone stand', group('prints').join('|'));
+        check('queue items match too', group('queue').join('|') === 'Stand for tablet');
+        type('Black');
+        check('spools and the prints that used them are found by colour', group('spools').join('|') === 'Bambu Lab, Black' && group('prints').join('|') === 'Vase|Phone stand', group('prints').join('|'));
+        type('shelf a');
+        check('a spool is found by its location', group('spools').join('|') === 'Bambu Lab, Black');
+        type('red archived');
+        check('every word has to match (archived spool)', group('spools').join('|') === 'Sunlu, Red');
+        type('gift');
+        check('tags are found, ignoring case, with the print count', group('tags').join('|') === 'gift' && qa(w, '.search-group[data-group="tags"] .list-sub')[0].textContent === '2 prints', group('tags').join('|'));
+        type('zzzz');
+        check('no match says so', q(w, '.search-none').textContent.includes('Nothing matches'));
+
+        // jumps
+        type('vase');
+        click(w, q(w, '.search-group[data-group="prints"] .search-result'));
+        check('picking a print closes the dialog, opens the Prints tab and filters to it', pop.style.display === 'none' && visibleTab(w).join() === 'prints' && qa(w, '#print-list .print-card').length === 1 && q(w, '#print-search').value === 'Vase');
+        check('the print is highlighted', !!q(w, '#print-list .print-card.found'));
+        check('focus is not left in the closed dialog', !pop.contains(w.document.activeElement));
+        key('/'); type('sunlu');
+        click(w, q(w, '.search-group[data-group="spools"] .search-result'));
+        check('picking an archived spool shows it even if archived spools were hidden', visibleTab(w).join() === 'filament' && !!q(w, '#spools .spool-card.found'));
+        key('/'); type('hook');
+        click(w, q(w, '.search-group[data-group="queue"] .search-result'));
+        check('picking a queue item opens the Queue tab', visibleTab(w).join() === 'queue' && !!q(w, '.queue-item.found'));
+        key('/'); type('decor');
+        click(w, q(w, '.search-group[data-group="tags"] .search-result'));
+        check('picking a tag filters prints by it', visibleTab(w).join() === 'prints' && q(w, '#print-tag-filter').value === 'decor' && qa(w, '#print-list .print-card').length === 1);
+        key('/'); type('stand');
+        key('Enter', q(w, '#search-all-input'));
+        check('Enter picks the first result', pop.style.display === 'none');
+
+        // button, Escape and shortcut guard
+        click(w, q(w, '#search-button'));
+        check('the header button opens it', pop.style.display === 'block');
+        key('3');
+        check('shortcuts are off while it is open', visibleTab(w).join() === 'prints');
+        key('Escape');
+        check('Escape closes it', pop.style.display === 'none');
+        click(w, q(w, '#settings-button')); click(w, q(w, '#settings-tab-preferences'));
+        check('the shortcuts list says Search everything', q(w, '#settings').textContent.includes('Search everything'));
+
+        // many results are capped
+        const many = { schemaVersion: 1, spools: { a: { brand: 'X', material: 'pla', color: 'Y', startGrams: 1000, date: '2026-09-01' } }, prints: {} };
+        for (let i = 0; i < 9; i++) many.prints['m' + i] = { name: 'Widget ' + i, date: '2026-10-0' + (i + 1), result: true, usage: [{ spoolId: 'a', grams: 1 }] };
+        const w2 = boot(JSON.stringify(many));
+        w2.document.dispatchEvent(new w2.KeyboardEvent('keydown', { key: '/', bubbles: true }));
+        setVal(w2, q(w2, '#search-all-input'), 'widget');
+        check('a group shows 6 results and says how many more', qa(w2, '.search-group[data-group="prints"] .search-result').length === 6 && q(w2, '.search-more').textContent.startsWith('3 more'));
+        check('no unexpected errors in section 61', errors.length === e, errors.slice(e).join(' | '));
+    }
+
+    console.log('\n[62] Retry a failed print');
+    {
+        const e = errors.length;
+        const w = boot(JSON.stringify({ schemaVersion: 1,
+            spools: { a: { brand: 'Bambu Lab', material: 'pla', color: 'Black', startGrams: 1000, date: '2026-09-01' } },
+            prints: {
+                f1: { name: 'Gear box', date: '2026-10-01', result: false, failReason: 'warping', notes: 'bed was cold', usage: [{ spoolId: 'a', grams: 33 }], minutes: 90, profile: { layer: '0.2 mm', infill: '15%' }, tags: ['gift'] },
+                f2: { name: ' gear  BOX', date: '2026-10-02', result: false, usage: [{ spoolId: 'a', grams: 30 }] },
+                s1: { name: 'Gear box', date: '2026-10-03', result: true, usage: [{ spoolId: 'a', grams: 34 }] },
+                v1: { name: 'Vase', date: '2026-10-01', result: true, usage: [{ spoolId: 'a', grams: 10 }] },
+                v2: { name: 'Vase', date: '2026-10-02', result: true, usage: [{ spoolId: 'a', grams: 10 }] },
+                z1: { name: 'Lonely fail', date: '2026-10-04', result: false, usage: [{ spoolId: 'a', grams: 5 }] }
+            } }));
+        click(w, q(w, '#prints-button'));
+        const card = (id) => q(w, `#print-list [data-id="${id}"]`);
+        check('only failed prints get a Retry button', !!byText(w, 'button', 'Retry', card('f1')) && !!byText(w, 'button', 'Retry', card('z1')) && !byText(w, 'button', 'Retry', card('s1')));
+        const att = (id) => { const el = q(w, '.print-attempt', card(id)); return el ? el.textContent : null; };
+        check('a model with failures shows which attempt each print was, oldest first', att('f1') === 'Attempt 1 of 3' && att('f2') === 'Attempt 2 of 3' && att('s1') === 'Attempt 3 of 3', [att('f1'), att('f2'), att('s1')].join('|'));
+        check('a model with no failures, or printed once, shows no attempt', att('v1') === null && att('z1') === null);
+        check('the tooltip says how many failed', q(w, '.print-attempt', card('f1')).title === '2 of the 3 prints with this name failed');
+
+        click(w, byText(w, 'button', 'Retry', card('f1')));
+        check('Retry opens a new print named the same', q(w, '#print-popup').style.display === 'block' && q(w, '#print-popup-title').textContent === 'Create Print' && q(w, '#name-tinput').value === 'Gear box');
+        check('it starts as a success, with today\'s date', q(w, '#result-rinput1').checked && q(w, '#print-popup #date-tinput').value !== '2026-10-01');
+        check('filament, time, profile and tags are copied', q(w, '.filament-row input').value === '33' && q(w, '#hours-ninput').value === '1' && q(w, '#minutes-ninput').value === '30' && q(w, '#profile-layer-tinput').value === '0.2 mm' && q(w, '#tags-tinput').value === 'gift', q(w, '#tags-tinput').value);
+        check('the failure note replaces the old notes and names the reason', /^Retry of the print from .+ that failed \(warping or curling\)\.$/.test(q(w, '#notes-input').value) && !q(w, '#notes-input').value.includes('bed was cold'), q(w, '#notes-input').value);
+        check('no failure reason is carried over', q(w, '#fail-reason-select').value === '');
+        savePrint(w);
+        const prints = Object.values(stored(w).prints);
+        check('saving adds a fourth Gear box print and leaves the failed one alone', prints.filter((p) => p.name === 'Gear box').length === 3 && Object.keys(stored(w).prints).length === 7 && stored(w).prints.f1.result === false);
+        const added = prints.find((p) => p.notes && p.notes.startsWith('Retry of'));
+        check('the new print is a success with no failure reason', added.result === true && added.failReason === '');
+        click(w, q(w, '#prints-button'));
+        check('the list now shows 4 attempts', qa(w, '#print-list .print-attempt').some((el) => el.textContent.endsWith('of 4')), qa(w, '#print-list .print-attempt').map((x) => x.textContent).join('|'));
+        check('no unexpected errors in section 62', errors.length === e, errors.slice(e).join(' | '));
+    }
+
     console.log(`\n==== ${passed} passed, ${failed} failed, ${errors.length} unexpected error(s) ====`);
     if (failures.length) console.log('FAILED:\n - ' + failures.join('\n - '));
     if (errors.length) console.log('ERRORS:\n' + errors.join('\n'));

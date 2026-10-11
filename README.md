@@ -45,6 +45,10 @@ A personal 3D print and filament tracker for Bambu Lab, FlashForge and ELEGOO pr
 - **Spools by location:** once a spool has a storage location, the Filament tab gets a location filter (including "No location") and a Group by location view.
 - **Data check:** the Data tab can look for prints that use deleted spools, spools logged past their weight, archived spools still in the AMS, prints with no filament or a future date, and exact duplicate prints. Each has one fix or an Edit/Re-weigh shortcut, and fixes can be undone.
 - **Settings that worked:** on the Filament tab, how often each layer height, infill and supports combination succeeded per material (a print counts under the material it used the most of; only combinations with 3 or more prints are shown, and "0.2" and "0.2 mm" count as the same).
+- **Enough-filament check:** when a filament row in the print form uses more grams than the spool has left, the warning offers up to two other active spools of the same material that have enough (the nearest fit first). One click switches the row. This also applies to prints started from the queue.
+- **Spools CSV:** the Data tab exports your spools (brand, material, colour, weight, price, date, location, grams left, status...) and imports spools from a spreadsheet. It reads this app's own export and common column names (Manufacturer, Colour, Cost...), commas, semicolons or tabs. Rows matching a spool you already have (brand, material, colour, date, weight, price) are skipped, and nothing existing is changed. On a new spool, a "Grams left" below the weight becomes a correction. Undo is offered.
+- **Search everything:** the magnifier in the header (or `/`) searches prints, spools, queue items and tags at once. Every word must match; picking a result jumps to it and highlights it.
+- **Retry a failed print:** a failed print gets a Retry button that opens a new print with the same filament, time, profile and tags, started as a success, with a note about the failure in place of the old notes. Models that have failed at least once show "Attempt 2 of 3" on each print card.
 - **Undo and snapshots:** deleting a spool, archiving, clearing the queue, deleting all data and resetting settings can all be undone from the toast. The last 5 versions of your data are also kept in this browser (daily, and before an import or delete-all) and can be restored from the Data tab. They are not a real backup.
 - **Accessibility:** skip link, keyboard navigation for tabs and popups, focus returns after popups close, visible focus, and text contrast of at least 4.5:1 in both themes and every accent.
 - **Achievements:** 44 of them in seven groups, with progress bars and silly names.
@@ -65,7 +69,7 @@ A personal 3D print and filament tracker for Bambu Lab, FlashForge and ELEGOO pr
 
 ## Keyboard shortcuts
 
-`1`-`7` switch tabs, `N` new print, `S` add a spool, `/` search prints, `T` toggle theme, `?` shortcut list. Turn off in Settings.
+`1`-`7` switch tabs, `N` new print, `S` add a spool, `/` search everything, `T` toggle theme, `?` shortcut list. Turn off in Settings.
 
 ## Running it
 
@@ -121,6 +125,8 @@ js/leftover.js    ask how much is left when archiving a spool
 js/customize.js   show, hide and reorder dashboard panels
 js/merge.js       merge another backup into this one
 js/check.js       data check with fixes
+js/spoolsCsv.js   spools to and from CSV
+js/search.js      search everything
 js/snapshots.js  js/snapshotPanel.js
 js/popups.js
 ```

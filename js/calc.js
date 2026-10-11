@@ -817,3 +817,43 @@ export function settingsThatWorked(min = MIN_SETTINGS_SAMPLE) {
     }
     return out.sort((a, b) => b.prints - a.prints || a.material.localeCompare(b.material));
 }
+
+/**
+ * Other active spools of the same material with at least `grams` left, smallest sufficient amount first
+ * (so a nearly empty spool gets used up before a fresh one). `skip` is a set of spool ids to leave out.
+ * Returns [{ id, spool, left }].
+ */
+export function spoolsWithEnough(spoolId, grams, skip = new Set()) {
+    const from = state.spools[spoolId];
+    if (!isObject(from)) return [];
+    const material = materialKey(from);
+    return activeSpools()
+        .filter(([id, s]) => id !== spoolId && !skip.has(id) && materialKey(s) === material)
+        .map(([id, s]) => ({ id, spool: s, left: remainingOf(id, s) }))
+        .filter((x) => x.left >= grams)
+        .sort((a, b) => a.left - b.left);
+}
+
+/**
+ * For models that have been printed more than once and failed at least once: which attempt each print was.
+ * Prints are matched by name (ignoring case and extra spaces) and ordered by date. Returns a Map of
+ * print id -> { n, of, failed }. Prints of models with no failures are not in the map.
+ */
+export function attemptInfo() {
+    const groups = new Map();
+    for (const [id, p] of Object.entries(state.prints)) {
+        if (!isObject(p)) continue;
+        const key = String(p.name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+        if (key === '') continue;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push([id, p]);
+    }
+    const out = new Map();
+    for (const list of groups.values()) {
+        const failed = list.filter(([, p]) => !p.result).length;
+        if (list.length < 2 || failed === 0) continue;
+        list.sort((a, b) => String(a[1].date || '').localeCompare(String(b[1].date || '')));
+        list.forEach(([id], i) => out.set(id, { n: i + 1, of: list.length, failed }));
+    }
+    return out;
+}
