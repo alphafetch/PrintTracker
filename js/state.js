@@ -1,5 +1,5 @@
 import { AMS_TYPES, BRANDS, brandOfLegacyModel, findPrinter } from './catalog.js';
-import { ACCENTS, BACKGROUNDS, CORRUPT_KEY, CURRENCIES, DATE_FORMATS, ANALYSIS_GROUPS, DASH_ACHIEVEMENTS, DASH_PANELS, FAIL_REASONS, RANGES, KNOWN_MATERIALS, MAX_EXTRA_PRINTERS, NOZZLES, SCHEMA_VERSION, SETTINGS_VERSION, STORAGE_KEY, UNIT_LABELS } from './constants.js';
+import { ACCENTS, BACKGROUNDS, CORRUPT_KEY, CURRENCIES, DATE_FORMATS, ANALYSIS_GROUPS, SPOOL_SORTS, DASH_ACHIEVEMENTS, DASH_PANELS, FAIL_REASONS, RANGES, KNOWN_MATERIALS, MAX_EXTRA_PRINTERS, NOZZLES, SCHEMA_VERSION, SETTINGS_VERSION, STORAGE_KEY, UNIT_LABELS } from './constants.js';
 import { clampNum, cleanText, isObject, isSafeId, isValidDate, normalizeLink, notify, todayLocal, validMinutes } from './util.js';
 
 // ---------- State and storage ----------
@@ -220,6 +220,7 @@ export function cleanUi(raw, hasData = false) {
         // Someone with data already does not need the getting-started guide unless they ask for it.
         guideDismissed: typeof u.guideDismissed === 'boolean' ? u.guideDismissed : hasData,
         groupByLocation: u.groupByLocation === true,
+        spoolSort: SPOOL_SORTS.some(([k]) => k === u.spoolSort) ? u.spoolSort : 'default',
         dashHidden: knownPanels(u.dashHidden, true),
         dashOrder: knownPanels(u.dashOrder, false)
     };
@@ -328,7 +329,7 @@ export function emptyState() {
         hideArchived: false,
         theme: null,
         lastExported: null,
-        ui: { backupDismissedAt: null, range: 'all', analysisGroup: 'brand-material', guideDismissed: false, groupByLocation: false, dashHidden: [], dashOrder: [] },
+        ui: { backupDismissedAt: null, range: 'all', analysisGroup: 'brand-material', guideDismissed: false, groupByLocation: false, spoolSort: 'default', dashHidden: [], dashOrder: [] },
         ams: {},
         parts: {},
         running: {}

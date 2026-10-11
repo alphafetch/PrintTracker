@@ -8,6 +8,7 @@ import { openSpoolPopup } from './spoolPopup.js';
 import { openLeftoverPopup } from './leftover.js';
 import { openWeighPopup } from './weigh.js';
 import { saveState, state } from './state.js';
+import { SPOOL_SORTS } from './constants.js';
 import { $, fmtGrams, fmtMoney, formatDate, h, icon, isObject, isValidDate, locationOf, makeSwatch, materialKey, notify, spoolHex, todayLocal } from './util.js';
 
 // ---------- Rendering: spools ----------
@@ -17,6 +18,7 @@ export const archiveOffBox = $('archive-off-checkbox');
 export const materialFilter = $('spool-material-filter');
 export const locationFilter = $('spool-location-filter');
 const groupBox = $('group-location-checkbox');
+export const spoolSortSelect = $('spool-sort');
 
 export function setupSpoolToolbar() {
     const plus = h('button', 'acc-buttons btn btn-primary');
@@ -34,6 +36,16 @@ export function setupSpoolToolbar() {
         renderSpools();
     });
     materialFilter.addEventListener('change', renderSpools);
+    for (const [key, text] of SPOOL_SORTS) {
+        const o = h('option', 'option-input', text);
+        o.value = key;
+        spoolSortSelect.appendChild(o);
+    }
+    spoolSortSelect.addEventListener('change', () => {
+        state.ui.spoolSort = spoolSortSelect.value;
+        saveState();
+        renderSpools();
+    });
     locationFilter.addEventListener('change', renderSpools);
     groupBox.addEventListener('change', () => {
         state.ui.groupByLocation = groupBox.checked;
@@ -77,6 +89,27 @@ function syncLocationTools(all) {
     return locations;
 }
 
+/** Comparator for [id, spool] pairs. Active spools always come before archived ones. */
+export function spoolComparator(sort) {
+    const dateOf = (e) => String(e[1].date || '');
+    const perKg = (e) => pricePerKg(e[1]);
+    const withPrice = (dir) => (a, b) => {
+        const x = perKg(a), y = perKg(b);
+        if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;   // no price: last
+        return (x - y) * dir;
+    };
+    const order = {
+        default: (a, b) => dateOf(b).localeCompare(dateOf(a)),
+        oldest: (a, b) => dateOf(a).localeCompare(dateOf(b)),
+        left: (a, b) => remainingOf(b[0], b[1]) - remainingOf(a[0], a[1]),
+        'left-asc': (a, b) => remainingOf(a[0], a[1]) - remainingOf(b[0], b[1]),
+        perkg: withPrice(1),
+        'perkg-desc': withPrice(-1),
+        brand: (a, b) => String(a[1].brand).localeCompare(String(b[1].brand)) || String(a[1].color).localeCompare(String(b[1].color))
+    }[sort] || ((a, b) => dateOf(b).localeCompare(dateOf(a)));
+    return (a, b) => (Number(Boolean(a[1].archived)) - Number(Boolean(b[1].archived))) || order(a, b);
+}
+
 export function renderSpools() {
     spoolList.replaceChildren();
     archiveOffBox.checked = state.hideArchived;
@@ -112,10 +145,8 @@ export function renderSpools() {
     }
 
     // Active spools first (newest first), archived last
-    visible.sort((a, b) => {
-        const arch = Number(Boolean(a[1].archived)) - Number(Boolean(b[1].archived));
-        return arch !== 0 ? arch : String(b[1].date || '').localeCompare(String(a[1].date || ''));
-    });
+    spoolSortSelect.value = state.ui.spoolSort;
+    visible.sort(spoolComparator(state.ui.spoolSort));
     if (groupBox.checked && where === 'all') {
         // One heading per place, then "No location" last
         const groups = [...locations.map((l) => ({ key: l.key, label: l.label })), { key: '', label: 'No location' }];

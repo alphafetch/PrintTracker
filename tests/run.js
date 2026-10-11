@@ -3847,6 +3847,44 @@ const msg = () => q(w, '#data-message').textContent;
         check('no unexpected errors in section 62', errors.length === e, errors.slice(e).join(' | '));
     }
 
+    console.log('\n[63] Spool sorting');
+    {
+        const e = errors.length;
+        const sp = (brand, color, grams, price, date, extra = {}) => ({ brand, material: 'pla', color, startGrams: grams, date, ...(price === null ? {} : { price }), ...extra });
+        const base = { schemaVersion: 1, prints: {}, spools: {
+            a: sp('Bambu Lab', 'Black', 1000, 30, '2026-09-01', { adjust: -100 }),    // 900 left, $30/kg
+            b: sp('Sunlu', 'White', 1000, 15, '2026-09-03', { adjust: -800 }),        // 200 left, $15/kg
+            c: sp('Esun', 'Gray', 500, null, '2026-09-02'),                           // 500 left, no price
+            d: sp('Elegoo', 'Red', 1000, 10, '2026-08-01', { archived: true }),       // archived
+            e: sp('Anycubic', 'Blue', 1000, 20, '2026-09-04', { adjust: -500 })       // 500 left, $20/kg
+        } };
+        const w = boot(JSON.stringify(base));
+        click(w, q(w, '#fila-button'));
+        const order = () => qa(w, '#spools .spool-card').map((c) => (/Bambu Lab|Sunlu|Esun|Elegoo|Anycubic/.exec(q(w, '.card-title', c).textContent) || [''])[0]);
+        const sel = q(w, '#spool-sort');
+        check('the sort box starts on the existing order: newest first, archived last', sel.value === 'default' && order().join() === 'Anycubic,Sunlu,Esun,Bambu Lab,Elegoo', order().join());
+        const opts = Array.from(sel.options).map((o) => o.textContent).join('|');
+        check('options include the old order and the new ones', opts === 'Newest first|Oldest first|Most left|Least left|Cheapest per kg|Priciest per kg|Brand A to Z', opts);
+        const pick = (v) => setVal(w, sel, v);
+        pick('oldest'); check('oldest first', order().join() === 'Bambu Lab,Esun,Sunlu,Anycubic,Elegoo', order().join());
+        pick('left'); check('most left first', order().join() === 'Bambu Lab,Esun,Anycubic,Sunlu,Elegoo' || order().join() === 'Bambu Lab,Anycubic,Esun,Sunlu,Elegoo', order().join());
+        pick('left-asc'); check('least left first, archived still last', order()[0] === 'Sunlu' && order()[4] === 'Elegoo', order().join());
+        pick('perkg'); check('cheapest per kg first, spools with no price after the priced ones', order().join() === 'Sunlu,Anycubic,Bambu Lab,Esun,Elegoo', order().join());
+        pick('perkg-desc'); check('priciest per kg first, no price still last', order().join() === 'Bambu Lab,Anycubic,Sunlu,Esun,Elegoo', order().join());
+        pick('brand'); check('brand A to Z', order().join() === 'Anycubic,Bambu Lab,Esun,Sunlu,Elegoo', order().join());
+        check('the choice is saved', stored(w).ui.spoolSort === 'brand');
+        const w2 = boot(JSON.stringify(stored(w)));
+        click(w2, q(w2, '#fila-button'));
+        check('the choice survives a reload', q(w2, '#spool-sort').value === 'brand' && qa(w2, '#spools .spool-card').length === 5);
+        const bad = JSON.parse(JSON.stringify(stored(w))); bad.ui.spoolSort = 'nonsense';
+        const w3 = boot(JSON.stringify(bad));
+        click(w3, q(w3, '#fila-button'));
+        check('an unknown saved sort falls back to newest first', q(w3, '#spool-sort').value === 'default');
+        click(w, q(w, '#archive-off-checkbox'));
+        check('sorting works together with hide archived', order().length === 4 && !order().includes('Elegoo'));
+        check('no unexpected errors in section 63', errors.length === e, errors.slice(e).join(' | '));
+    }
+
     console.log(`\n==== ${passed} passed, ${failed} failed, ${errors.length} unexpected error(s) ====`);
     if (failures.length) console.log('FAILED:\n - ' + failures.join('\n - '));
     if (errors.length) console.log('ERRORS:\n' + errors.join('\n'));

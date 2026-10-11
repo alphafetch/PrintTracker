@@ -157,3 +157,14 @@ export const DASH_PANELS = [
     ['upNext', 'Up next']
 ];
 export const DASH_ACHIEVEMENTS = 'achievements';
+
+/** How the Filament tab can order spools. Archived spools always come last. */
+export const SPOOL_SORTS = [
+    ['default', 'Newest first'],
+    ['oldest', 'Oldest first'],
+    ['left', 'Most left'],
+    ['left-asc', 'Least left'],
+    ['perkg', 'Cheapest per kg'],
+    ['perkg-desc', 'Priciest per kg'],
+    ['brand', 'Brand A to Z']
+];
