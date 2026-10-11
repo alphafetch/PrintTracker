@@ -7,6 +7,7 @@ import './spoolsCsv.js';
 import './slicerFill.js';
 import { initAutoBackup } from './autoBackup.js';
 import { setupBulk } from './bulk.js';
+import { setupBulkSpools } from './bulkSpools.js';
 import { setupSearch } from './search.js';
 import { setupViews } from './views.js';
 import { setupPrintsToolbar } from './prints.js';
@@ -34,6 +35,7 @@ document.getElementById('skip-link').addEventListener('click', (e) => {
 buildHeader();
 setupPrintsToolbar();
 setupBulk();
+setupBulkSpools();
 setupSearch();
 setupViews();
 initAutoBackup();

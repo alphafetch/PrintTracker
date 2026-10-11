@@ -4249,6 +4249,83 @@ const msg = () => q(w, '#data-message').textContent;
         check('no unexpected errors in section 69', errors.length === e, errors.slice(e).join(' | '));
     }
 
+    console.log('\n[70] Bulk actions on spools');
+    {
+        const e = errors.length;
+        const sp = (brand, color, material, extra = {}) => ({ brand, material, color, startGrams: 1000, price: 20, date: '2026-09-01', ...extra });
+        const base = { schemaVersion: 1, prints: {}, spools: {
+            a: sp('Alpha', 'Black', 'pla', { location: 'Shelf A' }),
+            b: sp('Beta', 'White', 'pla'),
+            c: sp('Gamma', 'Red', 'petg', { location: 'Dry box' }),
+            d: sp('Delta', 'Blue', 'pla', { archived: true, leftover: 120 })
+        }, ams: { u1: { name: 'AMS 1', type: 'ams', slots: ['a', 'b', '', ''] } } };
+        const w = boot(JSON.stringify(base));
+        click(w, q(w, '#fila-button'));
+        const card = (n) => qa(w, '#spools .spool-card').find((c) => c.querySelector('.card-title').textContent.startsWith(n));
+        const box = (n) => q(w, 'input.select-box', card(n));
+        const tick = (n, on = true) => { box(n).checked = on; box(n).dispatchEvent(new w.Event('change', { bubbles: true })); };
+        const sps = () => stored(w).spools;
+        check('Select button shows on the Filament tab, bar hidden, no checkboxes', !q(w, '#spool-select-button').hidden && q(w, '#spool-bulk-bar').hidden && qa(w, 'input.select-box', q(w, '#spools')).length === 0);
+        click(w, q(w, '#spool-select-button'));
+        check('Select shows the bar and one labelled checkbox per spool', !q(w, '#spool-bulk-bar').hidden && qa(w, 'input.select-box', q(w, '#spools')).length === 4 && box('Alpha').getAttribute('aria-label') === 'Select Alpha, Black');
+        check('nothing selected: actions disabled', q(w, '#spool-bulk-count').textContent === 'None selected' && q(w, '#spool-bulk-archive').disabled && q(w, '#spool-bulk-move').disabled && !q(w, '#spool-bulk-all').disabled);
+
+        // move
+        tick('Alpha'); tick('Beta');
+        check('ticking updates the count and highlight', q(w, '#spool-bulk-count').textContent === '2 of 4 shown selected' && card('Alpha').classList.contains('is-selected'), q(w, '#spool-bulk-count').textContent);
+        click(w, q(w, '#spool-bulk-move'));
+        check('Move with an empty box asks for a place', q(w, '#toast').textContent.includes('Type where'));
+        check('the place box suggests places already used', qa(w, '#spool-bulk-place-list option').map((o) => o.value).sort().join() === 'Dry box,Shelf A');
+        setVal(w, q(w, '#spool-bulk-place'), 'dry box');
+        click(w, q(w, '#spool-bulk-move'));
+        check('both selected spools move; others untouched', sps().a.location === 'dry box' && sps().b.location === 'dry box' && sps().c.location === 'Dry box');
+        check('toast says how many', q(w, '#toast').textContent.includes('Moved 2 spools to "dry box"'), q(w, '#toast').textContent);
+        click(w, byText(w, 'button', 'Undo', q(w, '#toast')));
+        check('Undo restores the old places', sps().a.location === 'Shelf A' && sps().b.location === undefined);
+        setVal(w, q(w, '#spool-bulk-place'), 'Shelf A');
+        click(w, q(w, '#spool-bulk-move'));
+        check('only spools that actually change are counted (Alpha already there)', q(w, '#toast').textContent.includes('Moved 1 spool to "Shelf A"') && sps().b.location === 'Shelf A', q(w, '#toast').textContent);
+        click(w, q(w, '#spool-bulk-unplace'));
+        check('Clear place removes the place from the selected spools', sps().a.location === undefined && sps().b.location === undefined && sps().c.location === 'Dry box');
+
+        // dried
+        click(w, q(w, '#spool-bulk-dried'));
+        const today = sps().a.driedDate;
+        check('Dried today stamps the selected spools', /^\d{4}-\d\d-\d\d$/.test(today) && sps().b.driedDate === today && sps().c.driedDate === undefined);
+        click(w, q(w, '#spool-bulk-dried'));
+        check('doing it again changes nothing and says so', q(w, '#toast').textContent.includes('Nothing to log'), q(w, '#toast').textContent);
+
+        // archive: leaves the AMS; undo puts it back
+        click(w, q(w, '#spool-bulk-archive'));
+        check('Archive archives both and unloads them from the AMS', sps().a.archived === true && sps().b.archived === true && sps().c.archived !== true && stored(w).ams.u1.slots.join() === ',,,', JSON.stringify(stored(w).ams));
+        click(w, byText(w, 'button', 'Undo', q(w, '#toast')));
+        check('Undo un-archives and reloads the AMS slots', !sps().a.archived && !sps().b.archived && stored(w).ams.u1.slots.join() === 'a,b,,');
+        click(w, q(w, '#spool-bulk-archive'));
+        click(w, q(w, '#spool-bulk-archive'));
+        check('archiving archived spools again changes nothing', q(w, '#toast').textContent.includes('Nothing to archive'));
+
+        // restore
+        tick('Delta');
+        click(w, q(w, '#spool-bulk-restore'));
+        check('Restore un-archives and forgets the saved leftover', !sps().d.archived && sps().d.leftover === undefined, JSON.stringify(sps().d));
+
+        // visibility: spools hidden by a filter are never touched
+        click(w, q(w, '#spool-bulk-none'));
+        check('Clear empties the selection', q(w, '#spool-bulk-count').textContent === 'None selected');
+        click(w, q(w, '#spool-bulk-all'));
+        check('Select all shown ticks every shown spool', q(w, '#spool-bulk-count').textContent === '4 of 4 shown selected' && q(w, '#spool-bulk-all').disabled);
+        setVal(w, q(w, '#spool-material-filter'), 'petg');
+        check('filtering drops hidden spools from the selection', q(w, '#spool-bulk-count').textContent === '1 of 1 shown selected', q(w, '#spool-bulk-count').textContent);
+        setVal(w, q(w, '#spool-bulk-place'), 'Garage');
+        click(w, q(w, '#spool-bulk-move'));
+        check('bulk move only touched the shown PETG spool', sps().c.location === 'Garage' && sps().a.location === undefined && sps().b.location === undefined);
+
+        // prints selection mode is independent
+        click(w, q(w, '#spool-bulk-done'));
+        check('Done hides the bar and checkboxes', q(w, '#spool-bulk-bar').hidden && qa(w, 'input.select-box', q(w, '#spools')).length === 0 && q(w, '#spool-select-button').getAttribute('aria-pressed') === 'false');
+        check('no unexpected errors in section 70', errors.length === e, errors.slice(e).join(' | '));
+    }
+
     console.log(`\n==== ${passed} passed, ${failed} failed, ${errors.length} unexpected error(s) ====`);
     if (failures.length) console.log('FAILED:\n - ' + failures.join('\n - '));
     if (errors.length) console.log('ERRORS:\n' + errors.join('\n'));

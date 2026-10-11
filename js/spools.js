@@ -7,6 +7,7 @@ import { filterBySpool } from './prints.js';
 import { openSpoolPopup } from './spoolPopup.js';
 import { openLeftoverPopup } from './leftover.js';
 import { openWeighPopup } from './weigh.js';
+import { isSelectingSpools, isSpoolSelected, setVisibleSpools, toggleSpoolSelected } from './bulkSpools.js';
 import { saveState, state } from './state.js';
 import { SPOOL_SORTS } from './constants.js';
 import { $, fmtGrams, fmtMoney, formatDate, h, icon, isObject, isValidDate, locationOf, makeSwatch, materialKey, notify, spoolHex, todayLocal } from './util.js';
@@ -124,6 +125,7 @@ export function renderSpools() {
         : `${plural(active.length, 'active spool')} · ~${fmtGrams(left)}g left in total`;
 
     if (all.length === 0) {
+        setVisibleSpools([]);
         spoolList.appendChild(emptyState_('No spools yet! Click the + to add a spool!',
             'Add each spool you buy. Prints subtract from it automatically.'));
         return;
@@ -137,6 +139,7 @@ export function renderSpools() {
         return materialFilter.value === 'all' || materialKey(s) === materialFilter.value;
     });
     if (visible.length === 0) {
+        setVisibleSpools([]);
         const allArchivedHidden = state.hideArchived && all.every(([, s]) => s.archived);
         spoolList.appendChild(allArchivedHidden
             ? emptyState_("All spools are archived. Uncheck 'Hide archived' to see them, or click the + to add a new spool.")
@@ -147,6 +150,7 @@ export function renderSpools() {
     // Active spools first (newest first), archived last
     spoolSortSelect.value = state.ui.spoolSort;
     visible.sort(spoolComparator(state.ui.spoolSort));
+    setVisibleSpools(visible.map(([id]) => id));
     if (groupBox.checked && where === 'all') {
         // One heading per place, then "No location" last
         const groups = [...locations.map((l) => ({ key: l.key, label: l.label })), { key: '', label: 'No location' }];
@@ -175,6 +179,18 @@ export function buildSpoolCard(id, s) {
     const level = fraction > warnFraction() ? 'ok' : fraction > lowFraction() ? 'warn' : 'fail';
 
     const top = h('div', 'spool-top');
+    if (isSelectingSpools()) {
+        const box = h('input', 'check-input select-box');
+        box.type = 'checkbox';
+        box.checked = isSpoolSelected(id);
+        box.setAttribute('aria-label', `Select ${s.brand}, ${s.color}`);
+        box.addEventListener('change', () => {
+            toggleSpoolSelected(id, box.checked);
+            card.classList.toggle('is-selected', box.checked);
+        });
+        top.appendChild(box);
+        card.classList.toggle('is-selected', box.checked);
+    }
     top.appendChild(makeSwatch(spoolHex(s), 'swatch swatch-large'));
     const heading = h('div', 'spool-heading');
     const title = h('h2', 'card-title', `${s.brand}, ${s.color}`);
