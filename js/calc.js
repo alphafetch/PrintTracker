@@ -857,3 +857,23 @@ export function attemptInfo() {
     }
     return out;
 }
+
+/**
+ * Hours printed per printer, in total and by month ("YYYY-MM"), for prints in the date range that have a logged time.
+ * Returns [{ id, name, hours, byMonth: { key: hours }, untimed }] for every printer, main printer first;
+ * `untimed` counts the printer's prints in the range that have no time and so are left out.
+ */
+export function printerHours(range = 'all') {
+    const out = new Map(printerIds().map((id) => [id, { id, name: printerName(id), hours: 0, byMonth: {}, untimed: 0 }]));
+    for (const p of Object.values(state.prints)) {
+        if (!isObject(p) || !inRange(p.date, range)) continue;
+        const row = out.get(printerIdOf(p));
+        const minutes = validMinutes(Number(p.minutes));
+        if (!row) continue;
+        if (minutes === null) { row.untimed++; continue; }
+        const key = String(p.date).slice(0, 7);
+        row.byMonth[key] = (row.byMonth[key] || 0) + minutes / 60;
+        row.hours += minutes / 60;
+    }
+    return Array.from(out.values());
+}

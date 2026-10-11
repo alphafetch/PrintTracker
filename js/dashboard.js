@@ -1,6 +1,6 @@
 import { buildAchievementsPanel } from './achievements.js';
 import { findMaterial } from './catalog.js';
-import { calcStats, describeDays, mostPrinted, hardwareCost, spoolForecast, totalGramsOfPrint } from './calc.js';
+import { calcStats, describeDays, hasManyPrinters, mostPrinted, printerHours, hardwareCost, spoolForecast, totalGramsOfPrint } from './calc.js';
 import { DASH_ACHIEVEMENTS, failReasonLabel, MATERIAL_COLORS, MONTHS, RANGES, Sections } from './constants.js';
 import { openPrintPopup } from './printPopup.js';
 import { emptyState_, makeBadge, plural } from './render.js';
@@ -61,8 +61,8 @@ export function monthSeries(byMonth) {
 }
 
 /** Column chart. `label(n)` is the short number over a bar, `title(s)` the hover text. */
-export function columnChart(series, label, title) {
-    const max = Math.max(...series.map((s) => s.n), 1);
+export function columnChart(series, label, title, sharedMax = null) {
+    const max = Math.max(sharedMax || 0, ...series.map((s) => s.n), 1);
     const chart = h('div', 'col-chart');
     for (const s of series) {
         const col = h('div', 'col');
@@ -171,6 +171,37 @@ function buildSpendPanel(stats) {
     const line = h('p', 'panel-total-line', `Whole setup so far: ${fmtMoney(c.total)} (filament ${fmtMoney(c.filament)}${hw}).`);
     line.id = 'setup-total-line';
     panel.appendChild(line);
+    return panel;
+}
+
+const fmtHours = (n) => (n >= 10 ? `${Math.round(n)}h` : `${Math.round(n * 10) / 10}h`);
+
+/** Hours per printer per month, as small charts on one shared scale. Only for setups with more than one printer. */
+function buildPrinterHoursPanel(range) {
+    if (!hasManyPrinters()) return null;
+    const rows = printerHours(range);
+    if (!rows.some((r) => r.hours > 0)) return null;
+    const merged = {};
+    for (const r of rows) for (const key of Object.keys(r.byMonth)) merged[key] = 1;
+    const months = monthSeries(merged);
+    const sharedMax = Math.max(...rows.flatMap((r) => months.map((m) => r.byMonth[m.key] || 0)), 0);
+    const panel = dashPanel('Printer hours');
+    panel.id = 'printer-hours-panel';
+    for (const r of rows) {
+        const block = h('div', 'printer-hours-row');
+        block.dataset.printer = r.id;
+        const head = h('p', 'printer-hours-head');
+        head.appendChild(h('strong', null, r.name));
+        head.append(` \u00B7 ${r.hours > 0 ? fmtHours(r.hours) : 'no timed prints'}`);
+        block.appendChild(head);
+        if (r.hours > 0) {
+            const series = months.map((m) => ({ ...m, n: r.byMonth[m.key] || 0 }));
+            block.appendChild(columnChart(series, fmtHours, (s) => `${r.name}, ${MONTHS[s.m - 1]} ${s.y}: ${fmtHours(s.n)}`, sharedMax));
+        }
+        if (r.untimed > 0) block.appendChild(h('p', 'secondary-text small', `${plural(r.untimed, 'print')} with no time logged ${r.untimed === 1 ? 'is' : 'are'} not counted.`));
+        panel.appendChild(block);
+    }
+    panel.appendChild(h('p', 'secondary-text small', 'Same scale on every chart, so the bars compare printers. Only prints with a logged time count.'));
     return panel;
 }
 
@@ -313,6 +344,8 @@ export function renderDashboard() {
     const built = new Map();
     const add = (key, ...els) => { if (els.length > 0) built.set(key, els); };
     add('printer', ...buildPrinterPanels(all));
+    const hoursPanel = buildPrinterHoursPanel(range);
+    if (hoursPanel) add('printerHours', hoursPanel);
 
     // --- Filament by material (donut) ---
     const materials = Object.entries(stats.byMaterial).filter(([, g]) => g > 0).sort((a, b) => b[1] - a[1]);

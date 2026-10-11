@@ -147,6 +147,7 @@ export const RANGES = [
 /** Dashboard panels the person can hide or reorder. Achievements can only be hidden; the rest sit in this default order. */
 export const DASH_PANELS = [
     ['printer', 'Printers'],
+    ['printerHours', 'Printer hours'],
     ['material', 'Filament by material'],
     ['perMonth', 'Prints per month'],
     ['heatmap', 'Print calendar'],

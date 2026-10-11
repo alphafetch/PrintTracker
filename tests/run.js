@@ -3348,7 +3348,7 @@ const msg = () => q(w, '#data-message').textContent;
         // Customize
         click(w, q(w, '#customize-button'));
         const pop = q(w, '#customize-popup');
-        check('Customize opens a dialog with every panel', pop.style.display === 'block' && qa(w, '#customize-list input').length === 10, String(qa(w, '#customize-list input').length));
+        check('Customize opens a dialog with every panel', pop.style.display === 'block' && qa(w, '#customize-list input').length === 11, String(qa(w, '#customize-list input').length));
         const key = (k) => q(w, `#customize-list [data-key="${k}"]`);
         const order = () => qa(w, '#dashboard-content .dash-grid > .panel').map((p) => p.querySelector('.panel-title').textContent);
         check('default order starts with filament by material, most-printed before recent', order().indexOf('Most-printed models') < order().indexOf('Recent prints'), order().join('|'));
@@ -4108,6 +4108,52 @@ const msg = () => q(w, '#data-message').textContent;
         click(w4, q(w4, '#activity-clear'));
         check('Clear log empties it', !!q(w4, '.activity-empty') && w4.localStorage.getItem('printTracker.activity') === '[]');
         check('no unexpected errors in section 66', errors.length === e, errors.slice(e).join(' | '));
+    }
+
+    console.log('\n[67] Printer hours chart');
+    {
+        const e = errors.length;
+        const pr = (name, date, minutes, printerId) => ({ name, date, result: true, usage: [{ spoolId: 'a', grams: 10 }], ...(minutes ? { minutes } : {}), ...(printerId ? { printerId } : {}) });
+        const base = { schemaVersion: 1,
+            settings: { printers: { px: { nickname: 'Workhorse', brand: 'bambu', model: '' } } },
+            spools: { a: { brand: 'Bambu Lab', material: 'pla', color: 'Black', startGrams: 5000, date: '2026-07-01' } },
+            prints: {
+                a: pr('A', '2026-08-03', 120), b: pr('B', '2026-08-10', 60), c: pr('C', '2026-09-02', 600, 'px'),
+                d: pr('D', '2026-09-20', 90), e: pr('E', '2026-09-21', null), f: pr('F', '2026-10-01', 300, 'px'), g: pr('G', '2026-10-02', 30, 'ghost')
+            },
+            ui: { guideDismissed: true } };
+        const w = boot(JSON.stringify(base));
+        const panel = () => q(w, '#printer-hours-panel');
+        check('the panel shows for a setup with two printers and timed prints', !!panel());
+        const row = (id) => q(w, `#printer-hours-panel .printer-hours-row[data-printer="${id}"]`);
+        check('one block per printer, main first, with total hours', qa(w, '.printer-hours-row', panel()).map((r) => r.dataset.printer).join() === ',px' && row('').textContent.includes('Main printer \u00B7 5h') && row('px').textContent.includes('Workhorse') && row('px').textContent.includes('15h'), panel().textContent);
+        check('an unknown printer id counts as the main printer (2 + 1 + 1.5 + 0.5 = 5h)', row('').querySelector('strong') && /5h/.test(row('').querySelector('.printer-hours-head').textContent), row('').querySelector('.printer-hours-head').textContent);
+        check('prints with no time are mentioned, not counted', row('').textContent.includes('1 print with no time logged is not counted'));
+        const bars = (id) => qa(w, '.col-bar:not(.col-empty)', row(id)).map((b) => b.style.height);
+        const cols = (id) => qa(w, '.col', row(id)).map((c) => c.title);
+        check('both printers get the same six months, May to Oct', cols('').length === 6 && cols('px').length === 6 && cols('')[0].includes('May 2026') && cols('')[5].includes('Oct 2026'), cols('').join('|'));
+        check('the tallest bar (Workhorse Sep, 10h) is 100% and others are on the same scale', bars('px')[0] === '100%' && bars('').every((hgt) => parseFloat(hgt) < 100), bars('px').join() + ' / ' + bars('').join());
+        check('a bar title names the printer, month and hours', cols('px').some((t) => t === 'Workhorse, Sep 2026: 10h'), cols('px').join('|'));
+
+        // hidden cases
+        const single = JSON.parse(JSON.stringify(base)); single.settings = {};
+        const w2 = boot(JSON.stringify(single));
+        check('hidden with a single printer', !q(w2, '#printer-hours-panel'));
+        const untimed = JSON.parse(JSON.stringify(base)); for (const p of Object.values(untimed.prints)) delete p.minutes;
+        const w3 = boot(JSON.stringify(untimed));
+        check('hidden when no print has a time', !q(w3, '#printer-hours-panel'));
+
+        // range filter
+        const sel = q(w, '#dash-range');
+        check('follows the date range (this month only shows nothing for old data)', (() => { setVal(w, sel, 'month'); const gone = !q(w, '#printer-hours-panel') || !q(w, '#printer-hours-panel').textContent.includes('15h'); setVal(w, sel, 'all'); return gone; })());
+
+        // customize
+        click(w, q(w, '#customize-button'));
+        check('it can be hidden like the other panels', !!q(w, '#customize-list [data-key="printerHours"]'));
+        const box = q(w, '#customize-list [data-key="printerHours"] input');
+        box.checked = false; box.dispatchEvent(new w.Event('change', { bubbles: true }));
+        check('unticking hides it', !panel());
+        check('no unexpected errors in section 67', errors.length === e, errors.slice(e).join(' | '));
     }
 
     console.log(`\n==== ${passed} passed, ${failed} failed, ${errors.length} unexpected error(s) ====`);
