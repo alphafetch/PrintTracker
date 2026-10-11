@@ -1,9 +1,11 @@
-import { daysOpen, describeDays, gramsUsedOfSpool, lowFraction, needsDrying, printsUsingSpool, remainingOf, spoolForecast, warnFraction } from './calc.js';
+import { adjustOf, daysOpen, priceHistory, pricePerKg, describeDays, gramsUsedOfSpool, lowFraction, needsDrying, printsUsingSpool, remainingOf, spoolForecast, warnFraction } from './calc.js';
 import { restoreSlots, slotsHolding, unloadSpool } from './ams.js';
 import { dryingAdvice } from './catalog.js';
 import { setupLabelsButton } from './labels.js';
 import { emptyState_, makeBadge, plural, renderAll } from './render.js';
+import { filterBySpool } from './prints.js';
 import { openSpoolPopup } from './spoolPopup.js';
+import { openLeftoverPopup } from './leftover.js';
 import { openWeighPopup } from './weigh.js';
 import { saveState, state } from './state.js';
 import { $, fmtGrams, fmtMoney, formatDate, h, icon, isObject, isValidDate, locationOf, makeSwatch, materialKey, notify, spoolHex, todayLocal } from './util.js';
@@ -133,6 +135,18 @@ export function buildSpoolCard(id, s) {
     card.appendChild(h('div', 'card-meta card-meta-soft',
         uses === 0 ? 'Not used yet' : `Used in ${plural(uses, 'print')} · ${fmtGrams(used)}g logged`));
 
+    const earlier = priceHistory(s, id);
+    if (earlier.length > 0 && !s.archived) {
+        const last = earlier[0];
+        const now = pricePerKg(s);
+        let text = `Last time: ${fmtMoney(last.perKg)}/kg${last.date ? ` (${formatDate(last.date)})` : ''}`;
+        if (now !== null) {
+            const pct = Math.round(((now - last.perKg) / last.perKg) * 100);
+            text += Math.abs(pct) < 1 ? '. Same price per kg.' : `. This spool is ${fmtMoney(now)}/kg, ${pct > 0 ? `${pct}% more` : `${-pct}% less`}.`;
+        }
+        card.appendChild(h('div', 'card-meta card-meta-soft price-history-line', text));
+    }
+
     const where = locationOf(s);
     const weighed = isValidDate(s.weighedDate) ? `Weighed ${formatDate(s.weighedDate)}` : '';
     if (where || weighed) {
@@ -163,7 +177,10 @@ export function buildSpoolCard(id, s) {
 
     const archive = h('button', 'btn btn-outline btn-small', s.archived ? 'Unarchive' : 'Archive');
     archive.type = 'button';
-    archive.addEventListener('click', () => archiveSpool(id));
+    archive.addEventListener('click', () => {
+        if (!s.archived && remainingOf(id, s) >= 1) openLeftoverPopup(id);
+        else archiveSpool(id);
+    });
     buttons.appendChild(archive);
 
     if (!s.archived) {
@@ -172,6 +189,14 @@ export function buildSpoolCard(id, s) {
         dry.title = 'Log that you dried this spool today';
         dry.addEventListener('click', () => markDried(id));
         buttons.appendChild(dry);
+    }
+
+    if (uses > 0) {
+        const shown = h('button', 'btn btn-outline btn-small', 'Show prints');
+        shown.type = 'button';
+        shown.title = 'See the prints that used this spool';
+        shown.addEventListener('click', () => filterBySpool(id));
+        buttons.appendChild(shown);
     }
 
     if (!s.archived) {
@@ -216,13 +241,26 @@ export function markDried(id) {
     });
 }
 
-export function archiveSpool(id) {
+/**
+ * Archive or restore a spool. When archiving, `leftover` (grams actually left) may be given;
+ * it is remembered and also corrects the spool's grams-left, so restoring it later starts from the real amount.
+ */
+export function archiveSpool(id, leftover = null) {
     const spool = state.spools[id];
     if (!spool) return;
     const was = Boolean(spool.archived);
     const places = slotsHolding(id);
+    const before = { adjust: spool.adjust, leftover: spool.leftover };
     spool.archived = !was;
-    if (spool.archived) unloadSpool(id);
+    if (spool.archived) {
+        unloadSpool(id);
+        if (Number.isFinite(leftover) && leftover >= 0) {
+            spool.adjust = adjustOf(spool) + (leftover - remainingOf(id, spool));
+            spool.leftover = Math.round(leftover * 10) / 10;
+        }
+    } else {
+        delete spool.leftover;
+    }
     saveState();
     renderAll();
     notify(`${spool.archived ? 'Archived' : 'Restored'} "${spool.brand}, ${spool.color}".`, {
@@ -231,6 +269,10 @@ export function archiveSpool(id) {
             onClick: () => {
                 if (!state.spools[id]) return;
                 state.spools[id].archived = was;
+                for (const [k, v] of Object.entries(before)) {
+                    if (v === undefined) delete state.spools[id][k];
+                    else state.spools[id][k] = v;
+                }
                 if (!was) restoreSlots(id, places);
                 saveState();
                 renderAll();

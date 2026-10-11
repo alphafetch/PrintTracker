@@ -2,8 +2,9 @@ import { DEFAULT_SWATCH, KNOWN_MATERIALS } from './constants.js';
 import { updateBodyLock } from './printPopup.js';
 import { renderAll } from './render.js';
 import { saveState, state } from './state.js';
+import { priceHistory } from './calc.js';
 import { similarHintText } from './colors.js';
-import { $, clearError, guessHex, isHex, isValidDate, locationOf, showError, spoolHex, todayLocal, uid } from './util.js';
+import { $, clearError, fmtMoney, formatDate, guessHex, isHex, isValidDate, locationOf, showError, spoolHex, todayLocal, uid } from './util.js';
 
 // ---------- Spool popup ----------
 
@@ -55,6 +56,7 @@ export function openSpoolPopup({ copyFromId = null, editId = null } = {}) {
     renderLocationOptions();
     clearError(spoolError);
     updateSimilarHint();
+    updatePriceHint();
     spoolReturn = document.activeElement;
     spoolPopup.style.display = 'block';
     spoolPopup.scrollTop = 0;
@@ -88,6 +90,18 @@ export function updateSimilarHint() {
     hint.hidden = text === '';
 }
 
+/** "Last time you paid..." hint under the price field, for the same brand, material and colour. */
+export function updatePriceHint() {
+    const hint = $('price-hint');
+    let text = '';
+    if (brandInput.value.trim() !== '' && colorInput.value.trim() !== '') {
+        const last = priceHistory({ brand: brandInput.value, material: materialDropdown.value, color: colorInput.value }, hintExclude)[0];
+        if (last) text = `Last time you paid ${fmtMoney(last.price)} for ${Math.round(last.grams)}g (${fmtMoney(last.perKg)}/kg)${last.date ? ` on ${formatDate(last.date)}` : ''}.`;
+    }
+    hint.textContent = text;
+    hint.hidden = text === '';
+}
+
 export function closeSpoolPopup() {
     editingSpoolId = null;
     spoolPopup.style.display = 'none';
@@ -103,7 +117,9 @@ colorInput.addEventListener('input', () => {
     updateSimilarHint();
 });
 hexInput.addEventListener('input', () => { hexTouched = true; updateSimilarHint(); });
-materialDropdown.addEventListener('change', updateSimilarHint);
+materialDropdown.addEventListener('change', () => { updateSimilarHint(); updatePriceHint(); });
+brandInput.addEventListener('input', updatePriceHint);
+colorInput.addEventListener('input', updatePriceHint);
 
 export function saveSpool() {
     const brand = brandInput.value.trim();

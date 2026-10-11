@@ -1,8 +1,8 @@
 import { activeSpools } from './calc.js';
 import { SIMILAR } from './colors.js';
-import { addFilamentRow, hoursInput, minutesInput, nameInput, profileInputs, rowList, updateRowControls } from './printPopup.js';
+import { addFilamentRow, hoursInput, openPrintPopup, printPopup, minutesInput, nameInput, profileInputs, rowList, updateRowControls } from './printPopup.js';
 import { readSlicerFile } from './slicerFile.js';
-import { $, colorDistance, fmtDuration, fmtGrams, isHex, spoolHex } from './util.js';
+import { $, colorDistance, fmtDuration, fmtGrams, h, isHex, notify, spoolHex } from './util.js';
 
 // ---------- "Fill from slicer file" button in the print popup ----------
 
@@ -74,10 +74,9 @@ export function applySlicerInfo(info) {
 }
 
 fileButton.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', async () => {
-    const file = fileInput.files && fileInput.files[0];
-    fileInput.value = '';
-    if (!file) return;
+
+/** Read a slicer file and fill the open print form from it. */
+export async function fillFromFile(file) {
     showNote(`Reading ${file.name}...`);
     try {
         const info = await readSlicerFile(file);
@@ -86,4 +85,73 @@ fileInput.addEventListener('change', async () => {
     } catch (error) {
         showNote(error && error.message ? error.message : 'Could not read this file.', true);
     }
+}
+
+fileInput.addEventListener('change', async () => {
+    const file = fileInput.files && fileInput.files[0];
+    fileInput.value = '';
+    if (file) await fillFromFile(file);
 });
+
+// ---------- Drop a slicer file anywhere on the page ----------
+
+const SLICER_FILE = /\.(3mf|gcode|gco|g|bgcode)$/i;
+let overlay = null;
+let dragDepth = 0;
+
+const hasFiles = (e) => Boolean(e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files'));
+
+function showOverlay(on) {
+    if (!overlay) {
+        overlay = h('div', 'drop-overlay', 'Drop a slicer file to log a print');
+        overlay.id = 'drop-overlay';
+        overlay.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(overlay);
+    }
+    overlay.hidden = !on;
+}
+
+/** Another popup (not the print form) is open: leave drops alone. */
+function otherPopupOpen() {
+    return document.body.classList.contains('modal-open') && printPopup.style.display !== 'block';
+}
+
+export async function handleDrop(file) {
+    if (!SLICER_FILE.test(file.name)) {
+        notify('That is not a slicer file. Drop a .gcode or .gcode.3mf file.', true);
+        return;
+    }
+    if (printPopup.style.display !== 'block') {
+        openPrintPopup();
+        if (printPopup.style.display !== 'block') return;   // no spools yet: the popup explained why
+    }
+    await fillFromFile(file);
+}
+
+export function setupDrop() {
+    document.addEventListener('dragenter', (e) => {
+        if (!hasFiles(e) || otherPopupOpen()) return;
+        dragDepth++;
+        showOverlay(true);
+    });
+    document.addEventListener('dragover', (e) => {
+        if (!hasFiles(e) || otherPopupOpen()) return;
+        e.preventDefault();
+    });
+    document.addEventListener('dragleave', (e) => {
+        if (!hasFiles(e)) return;
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (dragDepth === 0 && overlay) overlay.hidden = true;
+    });
+    document.addEventListener('drop', (e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        dragDepth = 0;
+        if (overlay) overlay.hidden = true;
+        if (otherPopupOpen()) return;
+        const file = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (file) handleDrop(file);
+    });
+}
+
+setupDrop();

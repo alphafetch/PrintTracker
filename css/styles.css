@@ -1440,3 +1440,18 @@ html[data-density="compact"] .page-head { margin-bottom: 12px; }
 .guide-body { display: grid; gap: 2px; flex: 1 1 260px; min-width: 0; }
 .guide-title { font-weight: 600; }
 .guide-text { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+
+/* ---------- Spool filter note, failure rate ---------- */
+.spool-filter-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 12px; padding: 8px 12px; border: 1px solid var(--accent); border-radius: 12px; background: var(--surface); }
+.spool-filter-note span { min-width: 0; overflow-wrap: anywhere; }
+.failure-rate-panel { margin-top: 16px; }
+
+.leftover-popup-content { max-width: 520px; }
+.leftover-actions { flex-wrap: wrap; }
+.leftover-actions .btn-primary { flex: 1 1 auto; }
+
+/* ---------- Drop a slicer file ---------- */
+.drop-overlay { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; font-size: 22px; font-weight: 700; color: var(--text); background: color-mix(in srgb, var(--bg) 82%, transparent); border: 4px dashed var(--accent); pointer-events: none; }
+.drop-overlay[hidden] { display: none; }
+.leftover-panel .list-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.leftover-panel .list-text { display: grid; gap: 2px; min-width: 0; }

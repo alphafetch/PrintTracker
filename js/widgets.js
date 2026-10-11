@@ -1,3 +1,4 @@
+import { autoBackupRecent } from './autoBackup.js';
 import { BRANDS } from './catalog.js';
 import { calcStats, effectivePrice, hardwareCost, hasManyPrinters, printerCfg, printerIds, printerStats } from './calc.js';
 import { SPOOL_GRAMS, UNIT_LABELS } from './constants.js';
@@ -14,6 +15,7 @@ export function buildBackupBanner() {
     const days = state.settings.backupDays;
     const hasData = Object.keys(state.prints).length + Object.keys(state.spools).length > 0;
     if (!days || !hasData) return null;
+    if (autoBackupRecent(days)) return null;   // a folder backup counts
 
     const last = state.lastExported ? new Date(state.lastExported) : null;
     const known = last && !Number.isNaN(last.getTime());

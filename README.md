@@ -33,6 +33,12 @@ A personal 3D print and filament tracker for Bambu Lab, FlashForge and ELEGOO pr
 - **Re-weigh a spool:** put a spool on a scale, enter the reading and the empty-spool weight, and the app corrects its grams-left (prints logged afterwards still subtract). The empty weight is remembered. Spools can also record where they are stored ("Dry box 2"), shown on the card and on labels, with suggestions from places you already used.
 - **Fill from a slicer file:** in the print popup, pick a `.gcode.3mf` (Bambu Studio / Orca) or a `.gcode` file to fill in the name, print time, grams per filament, the matching spool (by material and colour) and the profile. The file is read in your browser and never uploaded. The `.gcode.3mf` format is documented; the weight and time comments in plain `.gcode` differ by slicer and were written from memory of Bambu, Orca and Prusa output (Cura gives time only), so check the numbers it fills in. Binary G-code (`.bgcode`) is not supported.
 - **Select several prints:** the Select button on the Prints tab adds checkboxes. Tag or untag the selected prints, export just them as a CSV, or delete them (Undo restores them, and a snapshot is taken first). Selections only ever include prints currently shown by your search and filters.
+- **Automatic backup (Chrome and Edge):** on the Data tab, pick a folder once (a OneDrive or Dropbox folder is ideal). After you change something the app saves `print-tracker-backup.json` there, plus one dated copy per day for the last 14 days, so wiping your data by mistake cannot overwrite the only good copy (nothing is written while the app has no data). Restore with Import JSON. After a reload the browser may ask permission again, which needs one click ("Allow access"). A recent folder backup replaces the dashboard backup reminder. Other browsers lack the folder API and keep the manual export. I could only test this against a simulated folder, not a real folder picker, so check that a file appears the first time.
+- **Failure rate:** on the Filament tab, how often prints fail by brand, material, spool or printer (a print using two spools counts under both). Groups under 5 prints are marked and left out of the "highest / lowest" comparison.
+- **Leftover filament:** archiving a spool that still has filament asks how much is really left (Archive with an amount, Used up, or Do not record). The amount also corrects the spool's grams, so "Use again" later starts from the real number, and a Leftover filament panel adds up grams and value across archived spools.
+- **Price history:** the spool popup says what you paid last time for the same brand, material and colour, and a spool card compares its price per kg with the previous purchase.
+- **Prints with this spool:** a "Show prints" button on each spool card filters the Prints tab to prints that used it.
+- **Drop a slicer file:** drag a `.gcode` or `.gcode.3mf` onto the page and the print form opens already filled in.
 - **Undo and snapshots:** deleting a spool, archiving, clearing the queue, deleting all data and resetting settings can all be undone from the toast. The last 5 versions of your data are also kept in this browser (daily, and before an import or delete-all) and can be restored from the Data tab. They are not a real backup.
 - **Accessibility:** skip link, keyboard navigation for tabs and popups, focus returns after popups close, visible focus, and text contrast of at least 4.5:1 in both themes and every accent.
 - **Achievements:** 44 of them in seven groups, with progress bars and silly names.
@@ -75,7 +81,7 @@ npm test          # run the tests
 npm run lint      # ESLint over js/ and tests/
 ```
 
-`tests/run.js` bundles `js/main.js` with esbuild in memory, loads `index.html` into jsdom, and checks the behaviour of every tab, popup, import and export path, along with accessibility basics (names on controls, focus handling) and a few CSS rules. It prints `ok` or `FAIL` for each check and exits with an error code if any fail.
+On every push GitHub also runs both (`.github/workflows/test.yml`). `tests/run.js` bundles `js/main.js` with esbuild in memory, loads `index.html` into jsdom, and checks the behaviour of every tab, popup, import and export path, along with accessibility basics (names on controls, focus handling) and a few CSS rules. It prints `ok` or `FAIL` for each check and exits with an error code if any fail.
 
 ## Project structure
 
@@ -104,6 +110,8 @@ js/slicerFile.js  js/slicerFill.js   read .gcode / .gcode.3mf and fill the print
 js/running.js     "Printing now" timers and the start popup
 js/bulk.js        select several prints
 js/guide.js       getting-started checklist
+js/autoBackup.js  automatic backup to a folder
+js/leftover.js    ask how much is left when archiving a spool
 js/snapshots.js  js/snapshotPanel.js
 js/popups.js
 ```

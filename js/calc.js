@@ -665,3 +665,75 @@ export function tagTotals() {
     }
     return Array.from(map.values()).sort((a, b) => b.prints - a.prints || a.tag.localeCompare(b.tag));
 }
+
+/**
+ * How often prints fail, grouped by brand, material, spool or printer.
+ * A print that used several spools counts once under each group it touched.
+ * Returns [{ key, label, prints, failed, rate }], highest failure rate first.
+ */
+export function failureGroups(groupBy = 'brand') {
+    const groups = new Map();
+    const add = (key, label, print) => {
+        const g = groups.get(key) || { key, label, prints: 0, failed: 0, rate: 0 };
+        g.prints++;
+        if (!print.result) g.failed++;
+        groups.set(key, g);
+    };
+    for (const p of Object.values(state.prints)) {
+        if (!isObject(p)) continue;
+        if (groupBy === 'printer') {
+            const id = printerIdOf(p);
+            add(id || 'main', printerName(id), p);
+            continue;
+        }
+        const seen = new Set();
+        for (const u of usageOf(p)) {
+            const s = state.spools[u.spoolId];
+            if (!isObject(s)) continue;
+            const brand = String(s.brand || 'Unknown').trim();
+            const material = String(s.material || 'other').toUpperCase();
+            const [key, label] = groupBy === 'material' ? [material, material]
+                : groupBy === 'spool' ? [u.spoolId, `${brand}, ${s.color} (${material})`]
+                : [brand.toLowerCase(), brand];
+            if (seen.has(key)) continue;
+            seen.add(key);
+            add(key, label, p);
+        }
+    }
+    const list = Array.from(groups.values());
+    for (const g of list) g.rate = g.prints > 0 ? g.failed / g.prints : 0;
+    return list.sort((a, b) => b.rate - a.rate || b.prints - a.prints || a.label.localeCompare(b.label));
+}
+
+/** Groups with fewer prints than this are too small to compare. */
+export const MIN_FAILURE_SAMPLE = 5;
+
+/** Price per kg of a spool, or null without a price or weight. */
+export function pricePerKg(spool) {
+    const grams = Number(spool && spool.startGrams);
+    return isObject(spool) && Number.isFinite(spool.price) && grams > 0 ? (spool.price / grams) * 1000 : null;
+}
+
+const sameFilament = (a, b) => ['brand', 'material', 'color'].every((k) => String(a[k] || '').trim().toLowerCase() === String(b[k] || '').trim().toLowerCase());
+
+/**
+ * Earlier purchases of the same brand, material and colour (price known), newest first.
+ * `like` is anything with brand, material and color; `excludeId` skips the spool itself.
+ */
+export function priceHistory(like, excludeId = null) {
+    return Object.entries(state.spools)
+        .filter(([id, s]) => id !== excludeId && isObject(s) && sameFilament(s, like) && pricePerKg(s) !== null)
+        .map(([id, s]) => ({ id, price: s.price, grams: Number(s.startGrams), perKg: pricePerKg(s), date: isValidDate(s.date) ? s.date : '' }))
+        .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/** Archived spools whose leftover filament was recorded when they were archived. */
+export function leftoverSpools() {
+    return Object.entries(state.spools)
+        .filter(([, s]) => isObject(s) && s.archived && Number.isFinite(s.leftover) && s.leftover > 0)
+        .map(([id, s]) => {
+            const pk = pricePerKg(s);
+            return { id, spool: s, grams: s.leftover, value: pk === null ? null : (pk * s.leftover) / 1000 };
+        })
+        .sort((a, b) => b.grams - a.grams);
+}

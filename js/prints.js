@@ -1,9 +1,10 @@
 import { costOfPrint, energyCostOfPrint, hasManyPrinters, printerIdOf, printerName, tagKey, tagTotals, tagsOf, totalGramsOfPrint, usageOf, wearCostOfPrint } from './calc.js';
-import { DEFAULT_SWATCH, failReasonLabel } from './constants.js';
+import { DEFAULT_SWATCH, failReasonLabel, Sections } from './constants.js';
 import { isSelected, isSelecting, setVisible, toggleSelected } from './bulk.js';
 import { openPrintPopup } from './printPopup.js';
 import { emptyState_, makeBadge, plural, renderAll } from './render.js';
 import { cleanQueueSpec, saveState, state } from './state.js';
+import { showTab } from './tabs.js';
 import { $, fmtDuration, fmtGrams, fmtMoney, formatDate, h, icon, isObject, makeLink, makeSwatch, normalizeLink, notify, spoolHex, uid } from './util.js';
 
 // ---------- Rendering: prints ----------
@@ -28,6 +29,38 @@ export function setupPrintsToolbar() {
     printFilter.addEventListener('change', renderPrints);
     printSort.addEventListener('change', renderPrints);
     printTagFilter.addEventListener('change', renderPrints);
+}
+
+let spoolFilter = null;   // show only prints that used this spool (an id), or null
+
+/** Show only the prints that used this spool, and switch to the Prints tab. */
+export function filterBySpool(id) {
+    if (!isObject(state.spools[id])) return;
+    spoolFilter = id;
+    showTab(Sections.PRINTS);
+    renderPrints();
+    const note = document.getElementById('print-spool-note');
+    if (note) note.querySelector('button').focus();
+}
+
+export function clearSpoolFilter() {
+    spoolFilter = null;
+    renderPrints();
+}
+
+function renderSpoolFilterNote() {
+    const note = $('print-spool-note');
+    if (spoolFilter && !isObject(state.spools[spoolFilter])) spoolFilter = null;
+    note.hidden = spoolFilter === null;
+    note.replaceChildren();
+    if (spoolFilter === null) return;
+    const s = state.spools[spoolFilter];
+    note.appendChild(makeSwatch(spoolHex(s), 'swatch swatch-small'));
+    note.appendChild(h('span', null, `Only prints that used ${s.brand}, ${s.color}.`));
+    const clear = h('button', 'btn btn-outline btn-small', 'Show all prints');
+    clear.type = 'button';
+    clear.addEventListener('click', clearSpoolFilter);
+    note.appendChild(clear);
 }
 
 export function printSearchText(p) {
@@ -113,6 +146,7 @@ export function renderPrints() {
     const all = Object.entries(state.prints).filter(([, p]) => isObject(p));
     $('prints-toolbar').hidden = all.length === 0;
     renderTagControls();
+    renderSpoolFilterNote();
 
     if (all.length === 0) {
         setVisible([]);
@@ -127,6 +161,7 @@ export function renderPrints() {
     let entries = all.filter(([, p]) => {
         if (filter === 'success' && !p.result) return false;
         if (filter === 'failure' && p.result) return false;
+        if (spoolFilter !== null && !usageOf(p).some((u) => u.spoolId === spoolFilter)) return false;
         if (printTagFilter.value !== 'all' && !tagsOf(p).some((t) => tagKey(t) === printTagFilter.value)) return false;
         return query === '' || printSearchText(p).includes(query);
     });

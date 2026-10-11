@@ -362,9 +362,16 @@ export function loadState() {
 export let state = loadState();
 export function setState(next) { state = next; }
 
+const saveListeners = [];
+/** Run `fn` after every successful save (the automatic backup uses this). */
+export function onSave(fn) { saveListeners.push(fn); }
+
 export function saveState() {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        for (const fn of saveListeners) {
+            try { fn(); } catch (error) { console.error(error); }
+        }
         return true;
     } catch (error) {
         console.error(error);

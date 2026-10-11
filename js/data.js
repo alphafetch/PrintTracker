@@ -5,6 +5,7 @@ import { renderDashboard } from './dashboard.js';
 import { renderAll, safeRender } from './render.js';
 import { syncAllSettings } from './settingsKit.js';
 import { takeSnapshot } from './snapshots.js';
+import { renderAutoBackup } from './autoBackup.js';
 import { cleanAms, cleanParts, cleanRunning, cleanFailReason, cleanMaintenance, cleanPrinterId, cleanProfile, cleanQueueSpec, cleanTags, cleanSettings, cleanUi, emptyState, normalizeState, saveState, setState, state } from './state.js';
 import { applyTheme } from './theme.js';
 import { $, notify, uid, cleanText, isSafeId, fmtGrams, isHex, isObject, isValidDate, normalizeLink, todayLocal, validMinutes } from './util.js';
@@ -22,6 +23,7 @@ export function setDataMessage(text, isError = false) {
 }
 
 export function renderData() {
+    renderAutoBackup();
     const prints = Object.keys(state.prints).length;
     const spools = Object.keys(state.spools).length;
     const queued = Object.keys(state.queue).length;
@@ -137,6 +139,7 @@ export function validateImport(data) {
         if (typeof s.adjust === 'number' && Number.isFinite(s.adjust) && Math.abs(s.adjust) <= 100000) spools[id].adjust = s.adjust;
         if (typeof s.emptyGrams === 'number' && s.emptyGrams > 0 && s.emptyGrams <= 5000) spools[id].emptyGrams = s.emptyGrams;
         if (isValidDate(s.weighedDate)) spools[id].weighedDate = s.weighedDate;
+        if (spools[id].archived && typeof s.leftover === 'number' && s.leftover >= 0 && s.leftover <= 100000) spools[id].leftover = s.leftover;
     }
 
     const settings = data.settings === undefined ? null : cleanSettings(data.settings);

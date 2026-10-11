@@ -77,6 +77,7 @@ function addSpool(w, { brand, material = 'pla', color, grams, price = '', date =
     click(w, q(w, '#add-spool-button'));
 }
 
+function skipLeftover(w) { const p = w.document.getElementById('leftover-popup'); if (p && p.style.display === 'block') w.document.getElementById('leftover-skip').click(); }
 function openPrint(w) { click(w, q(w, '#prints .acc-buttons')); }
 function fillPrint(w, { name, date = '2026-10-05', link = '', success = true, rows }) {
     setVal(w, q(w, '#name-tinput'), name);
@@ -277,7 +278,7 @@ click(w, byText(w, 'button', 'Delete', bambu()));
 check('cannot delete spool used in prints', w.__alerts.length === 1 && /used in/i.test(w.__alerts[0]) && Object.keys(stored(w).spools).length === 2, w.__alerts[0]);
 
 console.log('\n[11] Archive / hide archived / unarchive');
-click(w, byText(w, 'button', 'Archive', bambu()));
+click(w, byText(w, 'button', 'Archive', bambu())); skipLeftover(w);
 check('spool archived flag saved', Object.values(stored(w).spools).find((s) => s.brand === 'Bambu Lab').archived === true);
 check('archived badge shown, no low badge', bambu().textContent.includes('Archived') && !bambu().textContent.includes('Low'));
 check('button now says Unarchive', !!byText(w, 'button', 'Unarchive', bambu()));
@@ -286,7 +287,7 @@ cb.checked = true; cb.dispatchEvent(new w.Event('change', { bubbles: true }));
 check('hide archived hides it + saved', !bambu() && stored(w).hideArchived === true);
 // archive the other as well -> "all archived" message
 const poly = () => qa(w, '#spools .row-card').find((c) => c.textContent.includes('Polymaker'));
-click(w, byText(w, 'button', 'Archive', poly()));
+click(w, byText(w, 'button', 'Archive', poly())); skipLeftover(w);
 check('all archived message', q(w, '#spools .warn-text') && q(w, '#spools .warn-text').textContent.includes('All spools are archived'));
 cb.checked = false; cb.dispatchEvent(new w.Event('change', { bubbles: true }));
 click(w, byText(w, 'button', 'Unarchive', poly())); click(w, byText(w, 'button', 'Unarchive', bambu()));
@@ -1061,7 +1062,7 @@ const msg = () => q(w, '#data-message').textContent;
         click(w, q(w, '#fila-button'));
         check('remaining + running-low shown from print usage', q(w, '#ams .ams-slot.is-loaded').textContent.includes('running low') || q(w, '#ams').textContent.includes('left'));
         const spoolId = Object.values(stored(w).ams).flatMap((x) => x.slots).find(Boolean);
-        click(w, byText(w, 'button', 'Archive', qa(w, '#spools .row-card')[0]) || q(w, '#spools .row-card button'));
+        click(w, byText(w, 'button', 'Archive', qa(w, '#spools .row-card')[0]) || q(w, '#spools .row-card button')); skipLeftover(w);
         check('archiving or using a spool keeps AMS consistent', Object.values(stored(w).ams).flatMap((x) => x.slots).filter(Boolean).every((id) => stored(w).spools[id] && !stored(w).spools[id].archived));
         click(w, byText(w, 'button', 'Remove', q(w, '#ams .ams-unit')));
         check('remove unit + undo', Object.keys(stored(w).ams).length === 1 && !!q(w, '#toast .toast-action'));
@@ -1204,7 +1205,7 @@ const msg = () => q(w, '#data-message').textContent;
         setVal(w, q(w, '#brand-tinput'), ''); click(w, q(w, '#add-spool-button'));
         check('edit validates like add', q(w, '#spool-popup-title') && !q(w, '#spool-error').hidden && stored(w).spools[spoolId].brand === 'Polymaker');
         click(w, q(w, '#cancel-spool-button'));
-        click(w, byText(w, 'button', 'Archive', q(w, '#spools .row-card')));
+        click(w, byText(w, 'button', 'Archive', q(w, '#spools .row-card'))); skipLeftover(w);
         click(w, byText(w, 'button', 'Edit', q(w, '#spools .row-card')));
         click(w, q(w, '#add-spool-button'));
         check('editing keeps the archived state', stored(w).spools[spoolId].archived === true);
@@ -1623,7 +1624,7 @@ const msg = () => q(w, '#data-message').textContent;
         addSpool(w, { brand: 'Bambu Lab', material: 'pla', color: 'Black', grams: '1000', price: '20', date: '2026-10-01' });
         addSpool(w, { brand: '<b>Evil</b>', material: 'petg', color: 'Red', grams: '750', price: '15' });
         addSpool(w, { brand: 'Old', material: 'abs', color: 'Grey', grams: '500' });
-        click(w, byText(w, 'button', 'Archive', qa(w, '#spools .row-card').find((c) => c.textContent.includes('Old'))));
+        click(w, byText(w, 'button', 'Archive', qa(w, '#spools .row-card').find((c) => c.textContent.includes('Old')))); skipLeftover(w);
         click(w, q(w, '#labels-button'));
         const pop = q(w, '#label-popup');
         check('popup opens as a dialog', pop.style.display === 'block' && pop.getAttribute('role') === 'dialog' && w.document.body.classList.contains('modal-open'));
@@ -1717,11 +1718,11 @@ const msg = () => q(w, '#data-message').textContent;
         check('Undo brings the spool back', !!stored(w).spools[tempId] && !!temp());
         check('Undo puts it back in the same AMS slot', Object.values(stored(w).ams)[0].slots.includes(tempId));
         // archive + undo
-        click(w, byText(w, 'button', 'Archive', temp()));
+        click(w, byText(w, 'button', 'Archive', temp())); skipLeftover(w);
         check('archive says what happened', q(w, '#toast').textContent.includes('Archived "Temp, Red"') && !Object.values(stored(w).ams)[0].slots.includes(tempId));
         undo(w);
         check('Undo un-archives and reloads the slot', stored(w).spools[tempId].archived === false && Object.values(stored(w).ams)[0].slots.includes(tempId));
-        click(w, byText(w, 'button', 'Archive', temp())); click(w, byText(w, 'button', 'Unarchive', temp()));
+        click(w, byText(w, 'button', 'Archive', temp())); skipLeftover(w); click(w, byText(w, 'button', 'Unarchive', temp()));
         check('unarchive says Restored', q(w, '#toast').textContent.includes('Restored'));
         undo(w);
         check('Undo of an unarchive archives it again', stored(w).spools[tempId].archived === true);
@@ -1973,7 +1974,7 @@ const msg = () => q(w, '#data-message').textContent;
         check('and changing it there updates the Upkeep box', q(w, '#dry-days-upkeep').value === '20' && qa(w, '#dry-list .is-due').length === 1, q(w,'#dry-days-upkeep').value+' '+qa(w, '#dry-list .is-due').length);
         // archived spools are not listed
         click(w, q(w, '#fila-button'));
-        click(w, byText(w, 'button', 'Archive', qa(w, '#spools .row-card').find((c) => c.textContent.includes('Sunlu'))));
+        click(w, byText(w, 'button', 'Archive', qa(w, '#spools .row-card').find((c) => c.textContent.includes('Sunlu')))); skipLeftover(w);
         check('archived spools drop out of the drying list', !row('Sunlu') && qa(w, '#dry-list .dry-row').length === 2);
         check('no unexpected errors in section 35', errors.length === e16, errors.slice(e16).join(' | '));
     }
@@ -3022,6 +3023,308 @@ const msg = () => q(w, '#data-message').textContent;
         await new Promise((r) => setTimeout(r, 150));
         check('importing an older backup with prints does not bring the guide back', stored(w2).ui.guideDismissed === true, JSON.stringify(stored(w2).ui));
         check('no unexpected errors in section 47', errors.length === e, errors.slice(e).join(' | '));
+    }
+
+    console.log('\n[48] Failure rate by group');
+    {
+        const e = errors.length;
+        const day = (o) => { const d = new Date(); d.setDate(d.getDate() + o); return d.toISOString().slice(0, 10); };
+        const mk = (n, spool, ok, extra = {}) => ({ name: 'P' + n, date: day(-n), result: ok, usage: [{ spoolId: spool, grams: 10 }], ...extra });
+        const prints = {};
+        let n = 1;
+        for (const ok of [false, false, true, true, true, true]) prints['a' + n] = mk(n++, 's1', ok);       // Bambu: 2 of 6
+        for (const ok of [true, true, true, true, true]) prints['b' + n] = mk(n++, 's2', ok);              // Sunlu: 0 of 5
+        prints.c1 = mk(n++, 's3', false);                                                                  // Esun: 1 of 1
+        prints.m1 = { name: 'Two spools', date: day(-1), result: false, usage: [{ spoolId: 's1', grams: 5 }, { spoolId: 's2', grams: 5 }] };
+        const state = (p, extra = {}) => JSON.stringify({ schemaVersion: 1, queue: {}, prints: p,
+            spools: { s1: { brand: 'Bambu Lab', material: 'pla', color: 'Black', startGrams: 1000, date: day(-90) }, s2: { brand: 'Sunlu', material: 'petg', color: 'Red', startGrams: 1000, date: day(-90) }, s3: { brand: 'Esun', material: 'pla', color: 'Blue', startGrams: 1000, date: day(-90) } }, ...extra });
+        let w = boot(state({ x: mk(1, 's1', true) }));
+        click(w, q(w, '#fila-button'));
+        check('no failed prints: no failure panel', q(w, '#failure-rate-panel').hidden);
+        w = boot(state(prints));
+        click(w, q(w, '#fila-button'));
+        const rows = () => Object.fromEntries(qa(w, '#failure-table tbody tr').map((r) => [r.dataset.key, qa(w, 'th,td', r).map((c) => c.textContent)]));
+        check('the failure panel shows by brand', !q(w, '#failure-rate-panel').hidden && q(w, '#failure-group').value === 'brand');
+        check('a print with two spools counts under both brands', rows()['bambu lab'].join('|') === 'Bambu Lab|7|3|43%' && rows()['sunlu'].join('|') === 'Sunlu|6|1|17%', JSON.stringify(rows()));
+        check('small groups are flagged', rows()['esun'][3] === '100% (few prints)', rows()['esun'][3]);
+        check('highest rate first', qa(w, '#failure-table tbody tr')[0].dataset.key === 'esun');
+        check('the summary only compares groups with 5+ prints', q(w, '#failure-summary').textContent.includes('Highest failure rate: Bambu Lab (3 of 7, 43%). Lowest: Sunlu (1 of 6, 17%)'), q(w, '#failure-summary').textContent);
+        setVal(w, q(w, '#failure-group'), 'material');
+        check('grouping by material', rows()['PLA'] && rows()['PETG'] && rows()['PETG'][1] === '6', JSON.stringify(rows()));
+        check('the choice survives and keeps focus', q(w, '#failure-group').value === 'material' && w.document.activeElement.id === 'failure-group');
+        check('no printer option with one printer', !qa(w, '#failure-group option').some((o) => o.value === 'printer'));
+        setVal(w, q(w, '#failure-group'), 'spool');
+        check('grouping by spool', Object.keys(rows()).length === 3 && rows().s1[0].startsWith('Bambu Lab, Black'));
+        w = boot(state({ x: mk(1, 's1', false), y: mk(2, 's1', true) }));
+        click(w, q(w, '#fila-button'));
+        check('with too little data it says so', q(w, '#failure-summary').textContent.includes('Not enough prints yet'), q(w, '#failure-summary').textContent);
+        w = boot(state({ x: mk(1, 's1', false, { printerId: 'px' }), y: mk(2, 's1', true) }, { settings: { printers: { px: { name: 'Second' } } } }));
+        click(w, q(w, '#fila-button'));
+        check('with two printers a Printer option appears', qa(w, '#failure-group option').some((o) => o.value === 'printer'));
+        setVal(w, q(w, '#failure-group'), 'printer');
+        check('and groups by printer', Object.keys(rows()).sort().join() === 'main,px', Object.keys(rows()).join());
+        check('no unexpected errors in section 48', errors.length === e, errors.slice(e).join(' | '));
+    }
+
+    console.log('\n[49] Prints with this spool');
+    {
+        const e = errors.length;
+        const w = boot();
+        addSpool(w, { brand: 'Bambu Lab', color: 'Black', grams: '1000', date: '2026-09-01' });
+        addSpool(w, { brand: 'Sunlu', material: 'petg', color: 'Red', grams: '1000', date: '2026-09-02' });
+        const spoolCard = (t) => qa(w, '#spools .spool-card').find((c) => c.textContent.includes(t));
+        check('a spool with no prints has no Show prints button', !byText(w, 'button', 'Show prints', spoolCard('Sunlu')));
+        openPrint(w); fillPrint(w, { name: 'With black', rows: [{ spoolIndex: 0, grams: 10 }] }); savePrint(w);
+        openPrint(w); fillPrint(w, { name: 'With red', rows: [{ spoolIndex: 1, grams: 10 }] }); savePrint(w);
+        openPrint(w); fillPrint(w, { name: 'Also black', rows: [{ spoolIndex: 0, grams: 10 }] }); savePrint(w);
+        click(w, q(w, '#fila-button'));
+        click(w, byText(w, 'button', 'Show prints', spoolCard('Black')));
+        check('Show prints goes to the Prints tab', !q(w, '#prints').hidden);
+        const names = () => qa(w, '#print-list .card-title').map((c) => c.textContent).sort().join();
+        check('and shows only prints that used the spool', names() === 'Also black,With black', names());
+        check('a note says which spool, with a way out', !q(w, '#print-spool-note').hidden && q(w, '#print-spool-note').textContent.includes('Bambu Lab, Black') && !!byText(w, 'button', 'Show all prints', q(w, '#print-spool-note')));
+        check('the count line says it is filtered', q(w, '#prints-sub').textContent.includes('Showing 2 of 3'), q(w, '#prints-sub').textContent);
+        click(w, byText(w, 'button', 'Show all prints', q(w, '#print-spool-note')));
+        check('Show all prints clears it', q(w, '#print-spool-note').hidden && qa(w, '#print-list .print-card').length === 3);
+        click(w, q(w, '#fila-button'));
+        click(w, byText(w, 'button', 'Show prints', spoolCard('Sunlu')));
+        check('another spool filters to its own prints', names() === 'With red');
+        click(w, q(w, '#fila-button'));
+        click(w, q(w, '#prints-button'));
+        click(w, byText(w, 'button', 'Delete', qa(w, '#print-list .print-card')[0]));
+        click(w, q(w, '#fila-button'));
+        click(w, byText(w, 'button', 'Delete', spoolCard('Sunlu')));
+        click(w, q(w, '#prints-button'));
+        check('deleting the spool clears the filter', q(w, '#print-spool-note').hidden && !Object.values(stored(w).spools).some((x) => x.brand === 'Sunlu'));
+        check('no unexpected errors in section 49', errors.length === e, errors.slice(e).join(' | '));
+    }
+
+    console.log('\n[50] Leftover filament when archiving');
+    {
+        const e = errors.length;
+        const w = boot();
+        addSpool(w, { brand: 'Bambu Lab', color: 'Black', grams: '1000', price: '20', date: '2026-09-01' });
+        addSpool(w, { brand: 'Sunlu', color: 'White', grams: '1000', price: '15', date: '2026-09-02' });
+        addSpool(w, { brand: 'Esun', color: 'Gray', grams: '1000', date: '2026-09-03' });
+        const card = (t) => qa(w, '#spools .spool-card').find((c) => c.textContent.includes(t));
+        const spoolOf = (c) => Object.values(stored(w).spools).find((s) => s.color === c);
+        const popup = () => q(w, '#leftover-popup');
+        openPrint(w); fillPrint(w, { name: 'Used some', rows: [{ spoolIndex: 0, grams: 600 }] }); savePrint(w);
+        click(w, q(w, '#fila-button'));
+        click(w, byText(w, 'button', 'Archive', card('Bambu Lab')));
+        check('Archive on a spool with filament left asks how much', popup().style.display === 'block' && popup().getAttribute('aria-modal') === 'true' && q(w, '#leftover-info').textContent.includes('The log says about'));
+        check('the box starts with what the log says', q(w, '#leftover-grams').value === '400', q(w, '#leftover-grams').value);
+        setVal(w, q(w, '#leftover-grams'), '-3');
+        click(w, q(w, '#leftover-save'));
+        check('a bad amount shows an error and keeps the dialog open', !q(w, '#leftover-error').hidden && popup().style.display === 'block');
+        click(w, q(w, '#leftover-cancel'));
+        check('Cancel archives nothing', !spoolOf('Black').archived && popup().style.display === 'none');
+        click(w, byText(w, 'button', 'Archive', card('Bambu Lab')));
+        setVal(w, q(w, '#leftover-grams'), '150');
+        click(w, q(w, '#leftover-save'));
+        let s = Object.values(stored(w).spools).find((x) => x.color === 'Black');
+        check('Archive saves the amount and archives', s.archived === true && s.leftover === 150, JSON.stringify(s));
+        check('it also corrects the grams left (1000 - 600 + adjust = 150)', s.adjust === -250, JSON.stringify(s));
+        check('the leftover panel appears with grams and value', !q(w, '#leftover-panel').hidden && q(w, '#leftover-total').textContent.includes('1 archived spool with 150g left, worth about $3.00'), q(w, '#leftover-total').textContent);
+        click(w, byText(w, 'button', 'Undo', q(w, '#toast')));
+        s = spoolOf('Black');
+        check('Undo restores the spool and removes the leftover', !s.archived && s.leftover === undefined && s.adjust === undefined && q(w, '#leftover-panel').hidden, JSON.stringify(s));
+        click(w, byText(w, 'button', 'Archive', card('Bambu Lab')));
+        setVal(w, q(w, '#leftover-grams'), '150');
+        click(w, q(w, '#leftover-save'));
+        click(w, byText(w, 'button', 'Use again', q(w, '#leftover-panel')));
+        s = spoolOf('Black');
+        check('Use again restores it, keeping the corrected amount', !s.archived && s.leftover === undefined && s.adjust === -250 && card('Bambu Lab').textContent.includes('~150g remaining'), card('Bambu Lab').textContent);
+        // used up / skip
+        click(w, byText(w, 'button', 'Archive', card('Sunlu')));
+        click(w, q(w, '#leftover-zero'));
+        s = spoolOf('White');
+        check('Used up archives with 0g left and no panel entry', s.archived && s.leftover === 0 && q(w, '#leftover-panel').hidden, JSON.stringify(s));
+        click(w, byText(w, 'button', 'Unarchive', card('Sunlu')));
+        check('unarchiving drops the leftover', spoolOf('White').leftover === undefined);
+        click(w, byText(w, 'button', 'Archive', card('Esun')));
+        click(w, q(w, '#leftover-skip'));
+        s = spoolOf('Gray');
+        check('Do not record archives without a leftover or correction', s.archived && s.leftover === undefined && s.adjust === undefined, JSON.stringify(s));
+        click(w, byText(w, 'button', 'Unarchive', card('Esun')));
+        // a spool already empty archives straight away
+        openPrint(w); fillPrint(w, { name: 'Empty it', rows: [{ spoolIndex: 2, grams: 1000 }] }); savePrint(w);
+        click(w, q(w, '#fila-button'));
+        click(w, byText(w, 'button', 'Archive', card('Esun')));
+        check('an empty spool archives without asking', popup().style.display === 'none' && spoolOf('Gray').archived === true);
+        // Escape closes
+        click(w, byText(w, 'button', 'Unarchive', card('Esun')));
+        click(w, byText(w, 'button', 'Archive', card('Bambu Lab')));
+        w.document.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        check('Escape closes the dialog', popup().style.display === 'none' && !spoolOf('Black').archived);
+        // import
+        const w2 = boot();
+        click(w2, q(w2, '#data-button'));
+        const input = q(w2, '#import-file');
+        const bad = { schemaVersion: 1, queue: {}, prints: {}, spools: {
+            a: { brand: 'A', color: 'a', startGrams: 1000, archived: true, leftover: 200, price: 20 },
+            b: { brand: 'B', color: 'b', startGrams: 1000, archived: false, leftover: 200 },
+            c: { brand: 'C', color: 'c', startGrams: 1000, archived: true, leftover: -5 },
+            d: { brand: 'D', color: 'd', startGrams: 1000, archived: true, leftover: 'lots' } } };
+        Object.defineProperty(input, 'files', { value: [new w2.File([JSON.stringify(bad)], 'b.json')], configurable: true });
+        input.dispatchEvent(new w2.Event('change', { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 150));
+        const im = Object.values(stored(w2).spools);
+        const g = (b) => im.find((x) => x.brand === b);
+        check('import keeps leftovers only on archived spools and only valid ones', g('A').leftover === 200 && g('B').leftover === undefined && g('C').leftover === undefined && g('D').leftover === undefined, JSON.stringify(im.map((x) => x.leftover)));
+        check('no unexpected errors in section 50', errors.length === e, errors.slice(e).join(' | '));
+    }
+
+    console.log('\n[51] Price history');
+    {
+        const e = errors.length;
+        const w = boot();
+        addSpool(w, { brand: 'Bambu Lab', color: 'Black', grams: '1000', price: '20', date: '2026-06-01' });
+        const card = (n) => qa(w, '#spools .spool-card')[n];
+        check('the first spool of a colour has no history line', !q(w, '.price-history-line', card(0)));
+        click(w, q(w, '#filament .acc-buttons'));
+        setVal(w, q(w, '#brand-tinput'), 'bambu lab');
+        setVal(w, q(w, '#color-tinput'), 'BLACK');
+        check('the popup says what you paid last time (any case)', !q(w, '#price-hint').hidden && q(w, '#price-hint').textContent.includes('$20.00 for 1000g ($20.00/kg)'), q(w, '#price-hint').textContent);
+        setVal(w, q(w, '#material-dropdown'), 'petg');
+        check('a different material has no history', q(w, '#price-hint').hidden);
+        setVal(w, q(w, '#material-dropdown'), 'pla');
+        setVal(w, q(w, '#grams-ninput'), '1000');
+        setVal(w, q(w, '#price-ninput'), '22');
+        setVal(w, q(w, '#date-dinput'), '2026-09-01');
+        click(w, q(w, '#add-spool-button'));
+        const newest = () => qa(w, '#spools .spool-card').find((c) => c.textContent.includes('$22.00'));
+        check('the newer spool compares per kg with the older one', q(w, '.price-history-line', newest()).textContent.includes('Last time: $20.00/kg') && q(w, '.price-history-line', newest()).textContent.includes('$22.00/kg, 10% more'), q(w, '.price-history-line', newest()).textContent);
+        const older = qa(w, '#spools .spool-card').find((c) => c.textContent.includes('$20.00'));
+        check('the older one is compared with the other too', q(w, '.price-history-line', older).textContent.includes('$22.00/kg') || q(w, '.price-history-line', older).textContent.includes('Last time'));
+        click(w, q(w, '#filament .acc-buttons'));
+        setVal(w, q(w, '#brand-tinput'), 'Bambu Lab'); setVal(w, q(w, '#color-tinput'), 'Black');
+        check('the hint uses the most recent purchase', q(w, '#price-hint').textContent.includes('$22.00'), q(w, '#price-hint').textContent);
+        click(w, q(w, '#cancel-spool-button'));
+        click(w, byText(w, 'button', 'Edit', newest()));
+        check('editing a spool does not compare it with itself', q(w, '#price-hint').textContent.includes('$20.00') && !q(w, '#price-hint').textContent.includes('$22.00'), q(w, '#price-hint').textContent);
+        click(w, q(w, '#cancel-spool-button'));
+        check('no unexpected errors in section 51', errors.length === e, errors.slice(e).join(' | '));
+    }
+
+    console.log('\n[52] Drop a slicer file on the page');
+    {
+        const e = errors.length;
+        const w = boot();
+        const drop = async (file, types = ['Files']) => {
+            const ev = new w.Event('drop', { bubbles: true, cancelable: true });
+            ev.dataTransfer = { types, files: [file] };
+            w.document.dispatchEvent(ev);
+            await new Promise((r) => setTimeout(r, 250));
+            return ev;
+        };
+        const over = (types = ['Files']) => { const ev = new w.Event('dragenter', { bubbles: true, cancelable: true }); ev.dataTransfer = { types, files: [] }; w.document.dispatchEvent(ev); };
+        const gcode = '; model printing time: 1h 5m 10s; total estimated time: 1h 5m 10s\n; filament used [g] = 12.34\n; filament_type = PLA\n; filament_colour = #000000\n';
+        await drop(new w.File([gcode], 'Tray.gcode'));
+        check('with no spools, a drop explains what to do first', q(w, '#print-popup').style.display !== 'block' && q(w, '#toast').textContent.includes('Add a filament spool first'));
+        addSpool(w, { brand: 'Bambu Lab', color: 'Black', grams: '1000', date: '2026-09-01' });
+        over();
+        check('dragging a file over the page shows the drop hint', !q(w, '#drop-overlay').hidden && q(w, '#drop-overlay').getAttribute('aria-hidden') === 'true');
+        over(['text/plain']);
+        const ev = await drop(new w.File([gcode], 'Tray.gcode'));
+        check('dropping prevents the browser from opening the file and hides the hint', ev.defaultPrevented && q(w, '#drop-overlay').hidden);
+        check('a dropped .gcode opens the print form filled in', q(w, '#print-popup').style.display === 'block' && q(w, '#name-tinput').value === 'Tray' && q(w, '#hours-ninput').value === '1' && q(w, '#minutes-ninput').value === '5' && q(w, '#filament-row-list .filament-row input').value === '12.3', q(w, '#name-tinput').value);
+        await drop(new w.File([gcode.replace('12.34', '20')], 'Second.gcode'));
+        check('dropping while the form is open fills that form (name kept)', q(w, '#name-tinput').value === 'Tray' && q(w, '#filament-row-list .filament-row input').value === '20');
+        await drop(new w.File(['hello'], 'photo.png'));
+        check('other file types are refused politely', q(w, '#toast').textContent.includes('not a slicer file'));
+        click(w, q(w, '#cancel-print-button'));
+        click(w, q(w, '#filament .acc-buttons'));
+        await drop(new w.File([gcode], 'Third.gcode'));
+        check('a drop while another popup is open is ignored', q(w, '#print-popup').style.display !== 'block');
+        check('no unexpected errors in section 52', errors.length === e, errors.slice(e).join(' | '));
+    }
+
+    console.log('\n[53] Automatic backup to a folder');
+    {
+        const e = errors.length;
+        let w = boot();
+        addSpool(w, { brand: 'Bambu Lab', color: 'Black', grams: '1000', date: '2026-09-01' });
+        click(w, q(w, '#data-button'));
+        check('without the folder API the panel explains the alternative', q(w, '#auto-backup-status').textContent.includes('cannot save backups'));
+
+        w = boot();
+        const files = {};
+        const idbStore = {};
+        const mkDir = (name) => ({
+            name, perm: 'granted',
+            async queryPermission() { return this.perm; },
+            async requestPermission() { this.perm = 'granted'; return 'granted'; },
+            async getFileHandle(n, opts = {}) {
+                if (!(n in files)) {
+                    if (!opts.create) { const err = new Error('nf'); err.name = 'NotFoundError'; throw err; }
+                    files[n] = '';
+                }
+                return { async createWritable() { let buf = ''; return { async write(t) { buf += t; }, async close() { files[n] = buf; } }; } };
+            },
+            async *entries() { for (const n of Object.keys(files)) yield [n, {}]; },
+            async removeEntry(n) { delete files[n]; }
+        });
+        const dir = mkDir('Backups');
+        const req = (fn) => { const r = {}; setTimeout(() => { r.result = fn(); if (r.onsuccess) r.onsuccess(); }); return r; };
+        w.indexedDB = { open() { const r = {}; setTimeout(() => { r.result = { createObjectStore() {}, transaction() { return { objectStore() { return {
+            put: (v, k) => req(() => { idbStore[k] = v; return k; }), get: (k) => req(() => idbStore[k]), delete: (k) => req(() => { delete idbStore[k]; return undefined; }) }; } }; } };
+            if (r.onupgradeneeded) r.onupgradeneeded(); if (r.onsuccess) r.onsuccess(); }); return r; } };
+        w.showDirectoryPicker = async () => dir;
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        click(w, q(w, '#data-button'));
+        addSpool(w, { brand: 'Bambu Lab', color: 'Black', grams: '1000', date: '2026-09-01' });
+        click(w, q(w, '#data-button'));
+        check('with folder support the panel offers Choose backup folder', !!q(w, '#auto-backup-choose') && q(w, '#auto-backup-status').textContent === 'Off.');
+        // old dated copies to prune
+        for (let i = 1; i <= 16; i++) files[`print-tracker-backup-2026-01-${String(i).padStart(2, '0')}.json`] = 'old';
+        files['notes.txt'] = 'mine';
+        click(w, q(w, '#auto-backup-choose'));
+        await wait(300);
+        const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+        check('choosing a folder saves the latest backup at once', typeof files['print-tracker-backup.json'] === 'string' && JSON.parse(files['print-tracker-backup.json']).spools && Object.keys(JSON.parse(files['print-tracker-backup.json']).spools).length === 1);
+        check('and a dated copy for today', files[`print-tracker-backup-${today}.json`] === files['print-tracker-backup.json']);
+        const dated = Object.keys(files).filter((n) => /^print-tracker-backup-\d{4}-\d{2}-\d{2}\.json$/.test(n));
+        check('only the newest 14 dated copies are kept and other files are untouched', dated.length === 14 && files['notes.txt'] === 'mine' && !files['print-tracker-backup-2026-01-01.json'], String(dated.length));
+        check('the folder is remembered', idbStore.folder === dir);
+        check('the status says it is on, with the folder name and time', q(w, '#auto-backup-status').textContent.includes('On: saving to the folder "Backups"') && q(w, '#auto-backup-status').textContent.includes('Last saved'), q(w, '#auto-backup-status').textContent);
+        check('Back up now, Change folder and Stop are offered', !!q(w, '#auto-backup-now') && !!q(w, '#auto-backup-choose') && !!q(w, '#auto-backup-stop'));
+
+        // the dashboard backup reminder is satisfied
+        click(w, q(w, '#dash-button'));
+        check('a recent folder backup replaces the backup reminder', !q(w, '#backup-banner'), w.localStorage.getItem('printTracker.autoBackup') + ' / ' + (q(w, '#backup-banner') ? q(w, '#backup-banner').textContent : ''));
+
+        // changes trigger a save after a short delay; the dated copy is not rewritten
+        files['print-tracker-backup.json'] = 'stale';
+        const todays = files[`print-tracker-backup-${today}.json`];
+        addSpool(w, { brand: 'Sunlu', color: 'White', grams: '1000', date: '2026-09-02' });
+        await wait(4600);
+        check('after a change the latest backup is rewritten by itself', Object.keys(JSON.parse(files['print-tracker-backup.json']).spools).length === 2);
+        check('today\'s dated copy keeps the first state of the day', files[`print-tracker-backup-${today}.json`] === todays);
+
+        // permission lost after a reload
+        dir.perm = 'prompt';
+        click(w, q(w, '#data-button'));
+        click(w, q(w, '#auto-backup-now'));
+        await wait(200);
+        check('when permission is gone it pauses and asks for a click', q(w, '#auto-backup-status').textContent.includes('Paused') && !!q(w, '#auto-backup-allow'));
+        files['print-tracker-backup.json'] = 'stale';
+        click(w, q(w, '#auto-backup-allow'));
+        await wait(200);
+        check('Allow access restores it and saves again', q(w, '#auto-backup-status').textContent.startsWith('On:') && files['print-tracker-backup.json'] !== 'stale');
+
+        // write failure is shown
+        dir.getFileHandle = async () => { throw new Error('Disk is full'); };
+        click(w, q(w, '#auto-backup-now'));
+        await wait(200);
+        check('a write error is shown in words', !!q(w, '#auto-backup-error') && q(w, '#auto-backup-error').textContent.includes('Disk is full'));
+        for (let i = errors.length - 1; i >= 0; i--) if (errors[i].includes('Disk is full')) errors.splice(i, 1);
+
+        // Stop
+        click(w, q(w, '#auto-backup-stop'));
+        await wait(100);
+        check('Stop forgets the folder and goes back to Off', idbStore.folder === undefined && q(w, '#auto-backup-status').textContent === 'Off.' && !w.localStorage.getItem('printTracker.autoBackup'));
+        check('no unexpected errors in section 53', errors.length === e, errors.slice(e).join(' | '));
     }
 
     console.log(`\n==== ${passed} passed, ${failed} failed, ${errors.length} unexpected error(s) ====`);
