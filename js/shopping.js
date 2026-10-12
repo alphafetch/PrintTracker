@@ -9,6 +9,7 @@ import { state } from './state.js';
 const KIND = {
     low: ['Running low', 'red'],
     soon: ['Runs out soon', 'amber'],
+    keep: ['Below your stock goal', 'amber'],
     minimum: ['Under minimum stock', 'amber'],
     favorite: ['Used a lot', 'purple']
 };
@@ -20,7 +21,9 @@ function fullName(spool) {
 /** Why an item is on the list, in one short sentence. */
 export function reasonOf(item) {
     const bits = [];
-    if (item.kind === 'minimum') {
+    if (item.kind === 'keep') {
+        bits.push(`you want ${plural(item.want, 'spool')} in stock, only ${item.have} ${item.have === 1 ? 'is' : 'are'} usable`);
+    } else if (item.kind === 'minimum') {
         bits.push(`only ${fmtGrams(item.left)}g of ${String(item.spool.material || 'other').toUpperCase()} in stock, your minimum is ${fmtGrams(item.min)}g`);
     } else if (item.kind === 'favorite') {
         bits.push(`used in ${plural(item.prints, 'print')} in the last 90 days, none left in stock`);

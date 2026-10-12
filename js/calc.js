@@ -473,6 +473,8 @@ const colorKey = (s) => `${String(s.brand || '').trim().toLowerCase()}|${materia
  * What to buy next. Each item: { kind, id, spool, key, left, forecast, prints, reorder }
  *   low       at or under the low-stock limit (or empty); `reorder` when no other spool of that material is in stock
  *   soon      not low yet, but will run out within SOON_DAYS at the recent pace
+ *   keep      fewer spools of a colour in stock (not low, not archived) than the "Keep in stock" number on its newest spool
+ *   minimum   a material under its minimum stock in Settings
  *   favorite  a colour used in 2+ prints in the last 90 days with nothing of it left in stock
  */
 export function shoppingList(today = todayLocal()) {
@@ -493,6 +495,13 @@ export function shoppingList(today = todayLocal()) {
             seen.add(key);
             items.push({ kind: 'soon', id, spool, key, left: forecast.left, reorder: false, forecast });
         }
+    }
+
+    // colours with fewer spools in stock than you asked to keep
+    for (const { id, spool, key, have, want, grams } of keepShortfalls()) {
+        if (seen.has(key)) continue;
+        seen.add(key);
+        items.push({ kind: 'keep', id, spool, key, left: grams, have, want, reorder: false, forecast: null });
     }
 
     // colours you keep coming back to
@@ -532,7 +541,7 @@ export function shoppingList(today = todayLocal()) {
         items.push({ kind: 'minimum', id: newest[0], spool: newest[1], key: colorKey(newest[1]), left: have, min, reorder: false, forecast: null });
     }
 
-    const order = { low: 0, soon: 1, minimum: 2, favorite: 3 };
+    const order = { low: 0, soon: 1, keep: 2, minimum: 3, favorite: 4 };
     items.sort((a, b) => order[a.kind] - order[b.kind] || Number(b.reorder) - Number(a.reorder) || a.left - b.left
         || String(a.spool.brand).localeCompare(String(b.spool.brand)));
     return items;
@@ -907,6 +916,37 @@ export function stockByMaterial() {
         out[key] = (out[key] || 0) + Math.max(0, remainingOf(id, s));
     }
     return out;
+}
+
+/**
+ * Colours (same brand, material and color) with fewer spools in stock than you asked to keep:
+ * [{ id, spool, key, have, want, grams }]. `want` comes from the newest spool of that colour that has a
+ * "Keep in stock" number; only active spools that are not low count as in stock.
+ */
+export function keepShortfalls() {
+    const groups = new Map();
+    for (const [id, s] of Object.entries(state.spools)) {
+        if (!isObject(s)) continue;
+        const key = colorKey(s);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push([id, s]);
+    }
+    const out = [];
+    for (const [key, members] of groups) {
+        members.sort((a, b) => String(b[1].date || '').localeCompare(String(a[1].date || '')));
+        const asked = members.find(([, s]) => Number.isInteger(s.keep) && s.keep >= 1);
+        if (!asked) continue;
+        let have = 0, grams = 0;
+        for (const [id, s] of members) {
+            if (s.archived) continue;
+            const left = remainingOf(id, s);
+            if (left <= 0 || left / (Number(s.startGrams) || 1) <= lowFraction()) continue;
+            have++;
+            grams += left;
+        }
+        if (have < asked[1].keep) out.push({ id: asked[0], spool: asked[1], key, have, want: asked[1].keep, grams });
+    }
+    return out.sort((a, b) => (b.want - b.have) - (a.want - a.have) || a.key.localeCompare(b.key));
 }
 
 /** Materials whose stock is under the minimum set in Settings: [{ material, have, min }], biggest shortfall first. */

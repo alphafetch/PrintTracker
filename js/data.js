@@ -1,5 +1,5 @@
 import { costOfPrint, energyCostOfPrint, hasManyPrinters, printerIdOf, printerName, tagsOf, totalGramsOfPrint, usageOf, wearCostOfPrint } from './calc.js';
-import { failReasonLabel, MAX_IMPORT_BYTES, SCHEMA_VERSION } from './constants.js';
+import { failReasonLabel, MAX_IMPORT_BYTES, MAX_KEEP, SCHEMA_VERSION } from './constants.js';
 import { planCsvImport } from './csv.js';
 import { renderDashboard } from './dashboard.js';
 import { renderAll, safeRender } from './render.js';
@@ -144,6 +144,7 @@ export function validateImport(data) {
         if (place) spools[id].location = place;
         if (typeof s.adjust === 'number' && Number.isFinite(s.adjust) && Math.abs(s.adjust) <= 100000) spools[id].adjust = s.adjust;
         if (typeof s.emptyGrams === 'number' && s.emptyGrams > 0 && s.emptyGrams <= 5000) spools[id].emptyGrams = s.emptyGrams;
+        if (Number.isInteger(s.keep) && s.keep >= 1 && s.keep <= MAX_KEEP) spools[id].keep = s.keep;
         if (isValidDate(s.weighedDate)) spools[id].weighedDate = s.weighedDate;
         if (spools[id].archived && typeof s.leftover === 'number' && s.leftover >= 0 && s.leftover <= 100000) spools[id].leftover = s.leftover;
     }

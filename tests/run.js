@@ -4389,6 +4389,66 @@ const msg = () => q(w, '#data-message').textContent;
         check('no unexpected errors in section 71', errors.length === e, errors.slice(e).join(' | '));
     }
 
+    console.log('\n[72] Keep in stock per color');
+    {
+        const e = errors.length;
+        const sp = (brand, color, extra = {}) => ({ brand, material: 'pla', color, startGrams: 1000, price: 20, date: '2026-09-01', ...extra });
+        const base = { schemaVersion: 1, prints: {}, spools: {
+            a: sp('Bambu Lab', 'Black', { keep: 2, date: '2026-09-10' }),
+            b: sp('Bambu Lab', 'Black', { adjust: -950 }),                 // low: does not count
+            c: sp('Sunlu', 'White', { keep: 1 }),                           // one good spool: goal met
+            d: sp('Esun', 'Red', { keep: 2, archived: true })               // archived: does not count
+        } };
+        const w = boot(JSON.stringify(base));
+        click(w, q(w, '#fila-button'));
+        const shop = q(w, '#shopping');
+        const rows = qa(w, '.shopping-row', shop);
+        const keepRows = rows.filter((r) => r.dataset.kind === 'keep');
+        check('only the colour below its goal is a goal entry; Sunlu (goal met) is not listed', keepRows.length === 1 && keepRows[0].textContent.includes('Esun') && !rows.some((r) => r.textContent.includes('Sunlu')), rows.map((r) => r.dataset.kind + ':' + r.textContent).join(' || '));
+        const red = rows.find((r) => r.textContent.includes('Esun'));
+        check('an archived-only colour shows the goal reason', !!red && red.dataset.kind === 'keep' && red.textContent.includes('you want 2 spools in stock, only 0 are usable') && red.textContent.includes('Below your stock goal'), red && red.textContent);
+        const black = rows.filter((r) => r.textContent.includes('Bambu Lab'));
+        check('a colour whose spool is already listed as low is not listed twice', black.length === 1 && black[0].dataset.kind === 'low', black.map((r) => r.dataset.kind).join());
+        check('the spool card says what you want kept', qa(w, '.keep-line').some((l) => l.textContent === 'Keep 2 spools of this color in stock.') && qa(w, '.keep-line').some((l) => l.textContent === 'Keep 1 spool of this color in stock.'));
+
+        // Edit popup
+        const edit = (n) => byText(w, 'button', 'Edit', qa(w, '#spools .spool-card').find((c) => c.querySelector('.card-title').textContent.startsWith(n)));
+        click(w, edit('Sunlu'));
+        check('the edit popup shows the saved goal', q(w, '#keep-ninput').value === '1');
+        setVal(w, q(w, '#keep-ninput'), '3');
+        click(w, q(w, '#add-spool-button'));
+        check('saving keeps the new goal', stored(w).spools.c.keep === 3);
+        check('and the list now includes Sunlu White (1 of 3)', qa(w, '.shopping-row', q(w, '#shopping')).some((r) => r.textContent.includes('Sunlu') && r.textContent.includes('you want 3 spools in stock, only 1 is usable')));
+        click(w, edit('Sunlu'));
+        setVal(w, q(w, '#keep-ninput'), '2.5');
+        click(w, q(w, '#add-spool-button'));
+        check('a decimal goal is refused', q(w, '#spool-error').textContent.includes('whole number') && stored(w).spools.c.keep === 3);
+        setVal(w, q(w, '#keep-ninput'), '21');
+        click(w, q(w, '#add-spool-button'));
+        check('a goal over 20 is refused', q(w, '#spool-error').textContent.includes('1 to 20'));
+        setVal(w, q(w, '#keep-ninput'), '');
+        click(w, q(w, '#add-spool-button'));
+        check('emptying the box removes the goal and the list entry', stored(w).spools.c.keep === undefined && !qa(w, '.shopping-row', q(w, '#shopping')).some((r) => r.textContent.includes('Sunlu')));
+
+        // Buy again copies the goal; the newest spool's goal wins
+        click(w, byText(w, 'button', 'Buy again', qa(w, '#spools .spool-card').find((c) => c.querySelector('.card-title').textContent.startsWith('Bambu'))));
+        check('Buy again starts with the same goal', q(w, '#keep-ninput').value === '2');
+        click(w, q(w, '#cancel-spool-button'));
+
+        // bad imports are cleaned
+        const bad = JSON.parse(JSON.stringify(base));
+        bad.spools.a.keep = 2.5; bad.spools.b.keep = 99; bad.spools.c.keep = '3'; bad.spools.d.keep = 4;
+        const w2 = boot();
+        click(w2, q(w2, '#data-button'));
+        const input = q(w2, '#import-file');
+        Object.defineProperty(input, 'files', { value: [new w2.File([JSON.stringify(bad)], 'b.json', { type: 'application/json' })], configurable: true });
+        input.dispatchEvent(new w2.Event('change', { bubbles: true }));
+        await new Promise((r) => setTimeout(r, 150));
+        const sk = stored(w2).spools;
+        check('importing cleans the goal: decimals, too big and text are dropped, 4 is kept', sk.a.keep === undefined && sk.b.keep === undefined && sk.c.keep === undefined && sk.d.keep === 4, JSON.stringify(Object.values(sk).map((x) => x.keep)));
+        check('no unexpected errors in section 72', errors.length === e, errors.slice(e).join(' | '));
+    }
+
     console.log(`\n==== ${passed} passed, ${failed} failed, ${errors.length} unexpected error(s) ====`);
     if (failures.length) console.log('FAILED:\n - ' + failures.join('\n - '));
     if (errors.length) console.log('ERRORS:\n' + errors.join('\n'));

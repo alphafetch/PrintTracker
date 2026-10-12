@@ -1,4 +1,4 @@
-import { DEFAULT_SWATCH, KNOWN_MATERIALS } from './constants.js';
+import { DEFAULT_SWATCH, KNOWN_MATERIALS, MAX_KEEP } from './constants.js';
 import { updateBodyLock } from './printPopup.js';
 import { renderAll } from './render.js';
 import { saveState, state } from './state.js';
@@ -18,6 +18,7 @@ export const priceInput = $('price-ninput');
 export const spoolDateInput = $('date-dinput');
 export const driedInput = $('dried-dinput');
 export const locationInput = $('location-tinput');
+export const keepInput = $('keep-ninput');
 export const spoolError = $('spool-error');
 
 export let hexTouched = false;   // true once the person picks a swatch color by hand
@@ -53,6 +54,7 @@ export function openSpoolPopup({ copyFromId = null, editId = null } = {}) {
     spoolDateInput.value = editing && isValidDate(editing.date) ? editing.date : todayLocal();
     driedInput.value = editing && isValidDate(editing.driedDate) ? editing.driedDate : '';
     locationInput.value = source ? locationOf(source) : '';
+    keepInput.value = source && Number.isInteger(source.keep) ? String(source.keep) : '';
     renderLocationOptions();
     clearError(spoolError);
     updateSimilarHint();
@@ -133,6 +135,8 @@ export function saveSpool() {
     if (!Number.isFinite(grams) || grams <= 0) return showError(spoolError, 'Enter the spool weight in grams (above 0).');
     if (hasPriceText && (!Number.isFinite(price) || price < 0)) return showError(spoolError, 'The price must be 0 or more, or left empty.');
     if (!isValidDate(spoolDateInput.value)) return showError(spoolError, 'Pick a valid date.');
+    const keep = keepInput.valueAsNumber;
+    if (keepInput.value.trim() !== '' && (!Number.isInteger(keep) || keep < 1 || keep > MAX_KEEP)) return showError(spoolError, `"Keep in stock" must be a whole number from 1 to ${MAX_KEEP}, or left empty.`);
     if (driedInput.value !== '' && !isValidDate(driedInput.value)) return showError(spoolError, 'Pick a valid "last dried" date, or clear it.');
 
     // Swatch: a hand-picked color wins; else keep the opened spool's own color if the name did not change;
@@ -145,6 +149,7 @@ export function saveSpool() {
     const old = editingSpoolId && state.spools[id] ? state.spools[id] : null;
     const kept = {};
     if (old) for (const k of ['adjust', 'emptyGrams', 'weighedDate']) if (old[k] !== undefined) kept[k] = old[k];
+    if (keepInput.value.trim() !== '') kept.keep = keep;
     state.spools[id] = {
         ...kept,
         location: locationInput.value.trim(),

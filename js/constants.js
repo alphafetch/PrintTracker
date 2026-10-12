@@ -171,5 +171,6 @@ export const SPOOL_SORTS = [
 ];
 
 export const MAX_SAVED_VIEWS = 12;
+export const MAX_KEEP = 20;   // most spools of one colour you can ask to keep in stock
 export const PRINT_RESULT_FILTERS = ['all', 'success', 'failure'];
 export const PRINT_SORTS = ['newest', 'oldest', 'name', 'grams', 'time'];

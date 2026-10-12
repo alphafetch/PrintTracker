@@ -260,6 +260,10 @@ export function buildSpoolCard(id, s) {
             [where ? `Stored: ${where}` : '', weighed].filter(Boolean).join(' · ')));
     }
 
+    if (Number.isInteger(s.keep) && s.keep >= 1) {
+        card.appendChild(h('div', 'card-meta card-meta-soft keep-line', `Keep ${plural(s.keep, 'spool')} of this color in stock.`));
+    }
+
     const forecast = spoolForecast(id, s);
     if (forecast) {
         const pace = `${fmtGrams(forecast.perWeek)}g a week`;
