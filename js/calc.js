@@ -56,6 +56,17 @@ export function printerStats(id) {
     return hasManyPrinters() ? calcStats('all', id) : calcStats();
 }
 
+/**
+ * Days an upkeep task has been running, for tasks counted in days. The clock starts when the printer
+ * arrives: before its arrival or purchase date nothing is counted, and afterwards days count from the
+ * later of the last time the task was done and the arrival date.
+ */
+export function upkeepDays(task, today = todayLocal()) {
+    const arrival = printerCfg(task.printerId || '').date;
+    const from = isValidDate(arrival) && arrival > task.lastDate ? arrival : task.lastDate;
+    return Math.max(0, daysBetween(from, today));
+}
+
 /** The settings for a printer id; an unknown id falls back to the main printer. */
 export function printerCfg(id) {
     const extra = extraPrinters();

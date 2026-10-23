@@ -4449,6 +4449,44 @@ const msg = () => q(w, '#data-message').textContent;
         check('no unexpected errors in section 72', errors.length === e, errors.slice(e).join(' | '));
     }
 
+    console.log('\n[73] Day-based upkeep waits for the printer to arrive');
+    {
+        const e = errors.length;
+        const iso = (o = 0) => { const d = new Date(); d.setHours(12); d.setDate(d.getDate() + o); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+        const mk = (printerDate, lastDate) => JSON.stringify({ schemaVersion: 1, prints: {}, spools: {},
+            settings: { printer: { brand: 'bambu', model: '', date: printerDate } },
+            maintenance: { t1: { name: 'Wipe rails', unit: 'days', every: 7, lastDate, atHours: 0, atPrints: 0, atGrams: 0 } } });
+        const rowText = (w) => { click(w, q(w, '#upkeep-button')); return qa(w, '.maint-row').map((r) => r.textContent).join(' | '); };
+        const w1 = boot(mk(iso(10), iso(-30)));
+        const t1 = rowText(w1);
+        check('printer arriving in the future: the day task has not started (7 days left, not overdue)', t1.includes('7 days left') && !t1.includes('Overdue') && !qa(w1, '.maint-row.is-due').length, t1);
+        const w2 = boot(mk(iso(-3), iso(-30)));
+        const t2 = rowText(w2);
+        check('after arrival, days count from the arrival date, not from before it (3 used, 4 left)', t2.includes('4 days left'), t2);
+        const w3 = boot(mk('', iso(-30)));
+        check('with no arrival date it counts from the last time as before (overdue)', rowText(w3).includes('Overdue by'), rowText(w3));
+        const w4 = boot(mk(iso(-60), iso(-2)));
+        check('a task done after arrival counts from when it was done (2 used, 5 left)', rowText(w4).includes('5 days left'), rowText(w4));
+        const w5 = boot(mk(iso(0), iso(-30)));
+        check('arriving today starts the clock at zero', rowText(w5).includes('7 days left'), rowText(w5));
+        // the achievement that notices overdue upkeep
+        const w6 = boot(mk(iso(10), iso(-30)));
+        click(w6, q(w6, '#dash-button'));
+        check('the dashboard shows no overdue upkeep banner before arrival', !qa(w6, '.maint-row.is-due').length && !/overdue/i.test(q(w6, '#dashboard-content').textContent), '');
+        // a second printer has its own arrival date
+        const two = JSON.parse(mk('', iso(-30)));
+        two.settings.printers = { px: { nickname: 'Second', brand: 'bambu', model: '', date: iso(5) } };
+        two.maintenance.t2 = { name: 'Oil rods', unit: 'days', every: 7, lastDate: iso(-30), atHours: 0, atPrints: 0, atGrams: 0, printerId: 'px' };
+        const w7 = boot(JSON.stringify(two));
+        click(w7, q(w7, '#upkeep-button'));
+        const rows = qa(w7, '.maint-row').map((r) => r.textContent);
+        check('with two printers each task follows its own printer: main overdue, second not started', rows.some((r) => r.includes('Wipe rails') && r.includes('Overdue')), rows.join(' | '));
+        setVal(w7, q(w7, '#upkeep-printer'), 'px');
+        const second = qa(w7, '.maint-row').map((r) => r.textContent).join(' | ');
+        check('the second printer (arriving in 5 days) has not started its day task', second.includes('Oil rods') && second.includes('7 days left') && !second.includes('Overdue'), second);
+        check('no unexpected errors in section 73', errors.length === e, errors.slice(e).join(' | '));
+    }
+
     console.log(`\n==== ${passed} passed, ${failed} failed, ${errors.length} unexpected error(s) ====`);
     if (failures.length) console.log('FAILED:\n - ' + failures.join('\n - '));
     if (errors.length) console.log('ERRORS:\n' + errors.join('\n'));

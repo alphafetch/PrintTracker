@@ -1,4 +1,4 @@
-import { effectiveWatts, remainingOf } from './calc.js';
+import { effectiveWatts, remainingOf, upkeepDays } from './calc.js';
 import { dashPanel } from './dashboard.js';
 import { state } from './state.js';
 import { fmtNum, h, icon, isObject, isValidDate, spoolHex } from './util.js';
@@ -55,7 +55,7 @@ export function achievementList(stats) {
             const used = t.unit === 'hours' ? stats.minutes / 60 - t.atHours
                 : t.unit === 'prints' ? stats.total - t.atPrints
                 : t.unit === 'spools' ? (stats.grams - t.atGrams) / 1000
-                : (Date.now() - new Date(t.lastDate + 'T00:00:00').getTime()) / 86400000;
+                : upkeepDays(t);
             return used >= t.every;
         }) : false;
     const amsUnits = Object.values(state.ams);

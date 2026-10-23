@@ -1,6 +1,6 @@
 import { autoBackupRecent } from './autoBackup.js';
 import { BRANDS } from './catalog.js';
-import { calcStats, effectivePrice, hardwareCost, hasManyPrinters, printerCfg, printerIds, printerStats } from './calc.js';
+import { calcStats, upkeepDays, effectivePrice, hardwareCost, hasManyPrinters, printerCfg, printerIds, printerStats } from './calc.js';
 import { SPOOL_GRAMS, UNIT_LABELS } from './constants.js';
 import { dashPanel } from './dashboard.js';
 import { exportData } from './data.js';
@@ -85,7 +85,7 @@ export function maintenanceStatus(stats, printerId = null) {
             const used = task.unit === 'hours' ? Math.max(0, st.minutes / 60 - task.atHours)
                 : task.unit === 'prints' ? Math.max(0, st.total - task.atPrints)
                 : task.unit === 'spools' ? Math.max(0, (st.grams - task.atGrams) / SPOOL_GRAMS)
-                : Math.max(0, daysBetween(task.lastDate, today));
+                : upkeepDays(task, today);
             const remaining = task.every - used;
             return { id, task, used, remaining, fraction: used / task.every, due: remaining <= 0 };
         });

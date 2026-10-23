@@ -75,7 +75,7 @@ A personal 3D print and filament tracker for Bambu Lab, FlashForge and ELEGOO pr
 - **Price:** typical US store prices (USD only, about 9 Oct 2026, bambuhub.net price tracker) for some Bambu models; AMS 2 Pro and AMS HT from Bambu's US store. Sales and combos differ, so edit it to what you paid.
 - **Electricity:** US average residential 18.2 cents/kWh in 2026 (EIA STEO, Oct 2026); UK 26.32 p/kWh price-cap average, before VAT (Ofgem, Oct-Dec 2026). Other currencies: enter your own.
 - **Material guide:** Bambu Lab wiki, [filament guide material table](https://wiki.bambulab.com/en/general/filament-guide-material-table) and [drying on the heatbed](https://wiki.bambulab.com/en/general/bambu-filament-drying-cover). These are Bambu's numbers for Bambu filament; other brands differ.
-- **Upkeep:** intervals marked "From docs" come from the Bambu Lab wiki or FlashForge's own cleaning guide (months are 30 days). "Suggested" items have no published interval (ELEGOO's docs give none) and are starting points.
+- **Upkeep:** intervals marked "From docs" come from the Bambu Lab wiki or FlashForge's own cleaning guide (months are 30 days). "Suggested" items have no published interval (ELEGOO's docs give none) and are starting points. Tasks counted in days wait for the printer: with an arrival date in the future they don't count at all, and afterwards they count from the arrival date or the last time you did them, whichever is later.
 
 ## Keyboard shortcuts
 
